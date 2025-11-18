@@ -1,0 +1,1 @@
+void matrixVectorMul(const float *X_h, const float *y_h, float *z_h, unsigned rows, unsigned cols);

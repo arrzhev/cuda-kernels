@@ -1,0 +1,82 @@
+# Python
+# Compiled Python files
+__pycache__/
+*.pyc
+*.pyd
+*.pyo
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Python packaging
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# IDE-specific files (e.g., PyCharm)
+.idea/
+.vscode/
+
+# Jupyter Notebook files
+.ipynb_checkpoints/
+
+# Pytest files
+.pytest_cache
+
+# C/C++
+# Object files
+*.o
+*.obj
+
+# Executables
+*.exe
+*.out
+*.bin
+
+# Libraries
+*.lib
+*.a
+*.so
+*.dll
+
+# Build directories
+build/
+cmake-build-*/
+Makefile.local
+
+# Debugging and profiling
+*.gch
+*.dSYM/
+*.prof
+
+# IDE-specific files (e.g., Visual Studio, CLion)
+.vs/
+*.suo
+*.user
+*.ncb
+*.aps
+*.opensdf
+*.sdf
+*.ipch/
+*.VC.db
+cmake-build-*/
+
+# CMake presets
+CMakePresets.json
+
+# Miscellaneous
+# Logs and temporary files
+*.log
+*.tmp
+temp/
+
+# Editor backup files
+*~
+#*#
+
+# OS generated files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,1 @@
+void vectorAdd(const float *x_h, const float *y_h, float *z_h, unsigned size);
