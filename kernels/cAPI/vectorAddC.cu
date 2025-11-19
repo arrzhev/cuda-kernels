@@ -17,7 +17,7 @@ void vectorAdd(const float *x_h, const float *y_h, float *z_h, unsigned size)
     cudaCheckErrors(cudaMemcpy(y_d, y_h, byteSize, cudaMemcpyHostToDevice));
 
     const unsigned blockDim = 256;
-    const unsigned gridDim = cdiv(size, blockDim);
+    const unsigned gridDim = CEIL_DIV(size, blockDim);
 
     vectorAdd_kernel<<<gridDim, blockDim>>>(x_d, y_d, z_d, size);
     cudaCheckErrors(cudaPeekAtLastError());

@@ -15,7 +15,7 @@ void rgb2gray(const unsigned char* src_h, unsigned char* dst_h, unsigned size, b
     cudaCheckErrors(cudaMemcpy(src_d, src_h, srcByteSize, cudaMemcpyHostToDevice));
 
     const unsigned blockDim = 256;
-    const unsigned gridDim = cdiv(size, blockDim);
+    const unsigned gridDim = CEIL_DIV(size, blockDim);
     
     if(isPlanar)
     {

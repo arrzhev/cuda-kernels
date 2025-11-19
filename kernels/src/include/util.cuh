@@ -1,6 +1,9 @@
+#ifndef UTIL_KERNELS
+#define UTIL_KERNELS
+
 #include <cstdio>
 
-#define cdiv(a, b) ((a + b - 1) / b)
+#define CEIL_DIV(x, y) (((x) + (y) - 1) / (y))
 
 #define cudaCheckErrors(func) { gpuAssert(func, __FILE__, __LINE__); }
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
@@ -42,10 +45,12 @@ __device__ __forceinline__ T blockReduceSum(T val)
 
         if (tid < warpSize)
         {
-            val = tid < cdiv(blockDim.x, warpSize) ? smem[tid] : 0.0f;
+            val = tid < CEIL_DIV(blockDim.x, warpSize) ? smem[tid] : 0.0f;
             val = warpReduceSum(val);
         }
     }
 
     return val;
 }
+
+#endif // UTIL_KERNELS

@@ -1,7 +1,7 @@
+#include <torch/torch.h>
 #include <c10/cuda/CUDAException.h>
 
 #include <tensorMulTorch.hpp>
-#include <vectorMul.cuh>
 #include <matrixMul.cuh>
 #include <util.cuh>
 
@@ -72,7 +72,7 @@ torch::Tensor tensorMulWarp(torch::Tensor x, torch::Tensor y)
     {
         const int blockSize = 256;
         const int gridSize = rows;
-        const size_t sharedSize = cdiv(blockSize, 32) * sizeof(double);
+        const size_t sharedSize = CEIL_DIV(blockSize, 32) * sizeof(double);
 
         matrixVectorMul_warp_kernel<<<gridSize, blockSize, sharedSize>>>(X, y, z, rows, cols);
     };

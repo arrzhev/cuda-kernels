@@ -1,1 +1,6 @@
+#ifndef VECTOR_MUL_KERNELS
+#define VECTOR_MUL_KERNELS
+
 __global__ void vectorMul_kernel(const float *x, const float *y, float *z, unsigned size);
+
+#endif // VECTOR_MUL_KERNELS

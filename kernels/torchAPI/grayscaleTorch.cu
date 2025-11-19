@@ -1,3 +1,4 @@
+#include <torch/torch.h>
 #include <c10/cuda/CUDAException.h>
 
 #include <util.cuh>
@@ -28,7 +29,7 @@ torch::Tensor rgb2gray(torch::Tensor rgbImage)
     {
         const unsigned size = rows * cols;
         const unsigned blockDim = 256;
-        const unsigned gridDim = cdiv(size, blockDim);
+        const unsigned gridDim = CEIL_DIV(size, blockDim);
         
         if(isPlanar)
         {
@@ -44,7 +45,7 @@ torch::Tensor rgb2gray(torch::Tensor rgbImage)
     else
     {
         const dim3 blockDim(16, 16);
-        const dim3 gridDim(cdiv(cols, blockDim.x), cdiv(rows, blockDim.y));
+        const dim3 gridDim(CEIL_DIV(cols, blockDim.x), CEIL_DIV(rows, blockDim.y));
 
         int64_t rowStride = isInterleaved ? rgbImage.stride(0) : rgbImage.stride(1);
         int64_t colStride = isInterleaved ? rgbImage.stride(1) : rgbImage.stride(2);

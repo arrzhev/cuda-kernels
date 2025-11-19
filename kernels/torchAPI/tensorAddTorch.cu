@@ -1,3 +1,4 @@
+#include <torch/torch.h>
 #include <c10/cuda/CUDAException.h>
 
 #include <tensorAddTorch.hpp>

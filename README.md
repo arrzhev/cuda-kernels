@@ -1,6 +1,6 @@
 # CUDA Kernels
 
-Set of popular CUDA kernel functions with various optimizations accompanied by simple C and Torch APIs to demonstrate performance.
+Set of CUDA kernel functions with various optimizations accompanied by simple C and Torch APIs.
 
 ## Getting Started
 

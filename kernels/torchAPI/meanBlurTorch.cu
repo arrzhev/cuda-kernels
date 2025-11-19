@@ -1,3 +1,4 @@
+#include <torch/torch.h>
 #include <c10/cuda/CUDAException.h>
 
 #include <util.cuh>
@@ -19,16 +20,16 @@ torch::Tensor meanBlur(torch::Tensor image, const unsigned kernelSize)
     if(kernelSize == 1)
         return image.clone();
 
-    auto bluredImage = torch::empty_like(image);
+    auto blurredImage = torch::empty_like(image);
 
     const int kernelRadius = (kernelSize - 1) / 2;
     const unsigned rows = isDim2 ? image.size(0) : image.size(1);
     const unsigned cols = isDim2 ? image.size(1) : image.size(2);
 
     auto src = image.data_ptr<unsigned char>();
-    auto dst = bluredImage.data_ptr<unsigned char>();
+    auto dst = blurredImage.data_ptr<unsigned char>();
     const dim3 blockDim(16, 16);
-    const dim3 gridDim(cdiv(cols, blockDim.x), cdiv(rows, blockDim.y));
+    const dim3 gridDim(CEIL_DIV(cols, blockDim.x), CEIL_DIV(rows, blockDim.y));
 
     if(isColored)
     {
@@ -47,5 +48,5 @@ torch::Tensor meanBlur(torch::Tensor image, const unsigned kernelSize)
 
     C10_CUDA_KERNEL_LAUNCH_CHECK();
 
-    return bluredImage;
+    return blurredImage;
 }

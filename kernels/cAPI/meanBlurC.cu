@@ -18,7 +18,7 @@ void meanBlur(const unsigned char* src_h, unsigned char* dst_h, unsigned rows, u
     cudaCheckErrors(cudaMemcpy(src_d, src_h, byteSize, cudaMemcpyHostToDevice));
 
     const dim3 blockDim(16, 16);
-    const dim3 gridDim(cdiv(cols, blockDim.x), cdiv(rows, blockDim.y));
+    const dim3 gridDim(CEIL_DIV(cols, blockDim.x), CEIL_DIV(rows, blockDim.y));
 
     if(isColored)
     {
