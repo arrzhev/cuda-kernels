@@ -43,7 +43,6 @@ __global__ void meanBlurColor_kernel(const unsigned char* srcR, const unsigned c
         float sumG = 0.0f;
         float sumB = 0.0f;
         float count = 0.0f;
-        unsigned index = row * cols + col;
 
         for (int i = -kernelRadius; i <= kernelRadius; ++i)
         {
@@ -55,7 +54,7 @@ __global__ void meanBlurColor_kernel(const unsigned char* srcR, const unsigned c
                 if (neighborRow >= 0 && neighborRow < rows && 
                     neighborCol >= 0 && neighborCol < cols)
                 {
-                    unsigned neighborIndex = neighborRow * cols + neighborCol;
+                    const unsigned neighborIndex = neighborRow * cols + neighborCol;
                     sumR += srcR[neighborIndex];
                     sumG += srcG[neighborIndex];
                     sumB += srcB[neighborIndex];
@@ -64,6 +63,7 @@ __global__ void meanBlurColor_kernel(const unsigned char* srcR, const unsigned c
             }
         }
 
+        const unsigned index = row * cols + col;
         dstR[index] = static_cast<unsigned char>(sumR / count);
         dstG[index] = static_cast<unsigned char>(sumG / count);
         dstB[index] = static_cast<unsigned char>(sumB / count);

@@ -28,7 +28,7 @@ __device__ __forceinline__ T warpReduceSum(T val)
 template <typename T>
 __device__ __forceinline__ T blockReduceSum(T val)
 {
-    extern __shared__ T smem[];
+    __shared__ T smem[32]; // max possible size considering 1024 threads per block. 32 = 1024 / 32 (warp size)
 
     val = warpReduceSum(val);
 

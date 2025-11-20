@@ -17,7 +17,7 @@ torch::Tensor meanBlur(torch::Tensor image, const unsigned kernelSize)
     const bool isColored = isDim3 && image.size(0) == 3;
     TORCH_CHECK(isGray || isColored, "input tensor should be 2 dims gray image or 3 dims image in planar(CHW) format");
 
-    if(kernelSize == 1)
+    if(kernelSize == 1U)
         return image.clone();
 
     auto blurredImage = torch::empty_like(image);
@@ -26,7 +26,7 @@ torch::Tensor meanBlur(torch::Tensor image, const unsigned kernelSize)
     const unsigned rows = isDim2 ? image.size(0) : image.size(1);
     const unsigned cols = isDim2 ? image.size(1) : image.size(2);
 
-    auto src = image.data_ptr<unsigned char>();
+    const auto src = image.data_ptr<unsigned char>();
     auto dst = blurredImage.data_ptr<unsigned char>();
     const dim3 blockDim(16, 16);
     const dim3 gridDim(CEIL_DIV(cols, blockDim.x), CEIL_DIV(rows, blockDim.y));

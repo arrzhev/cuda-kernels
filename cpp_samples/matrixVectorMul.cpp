@@ -6,7 +6,7 @@
 #include <cmath>
 #include <assert.h>
 
-#include <matrixMulC.hpp>
+#include <matrixVectorMulC.hpp>
 #include "common.hpp"
 
 int main(int argc, char **argv)
@@ -33,7 +33,7 @@ int main(int argc, char **argv)
 
     assert(compareVectors(result, cudaResult));
 
-    std::cout << "Matrix x Vector C api test passed!" << std::endl;
+    std::cout << "Matrix x Vector multiplication C api test passed!" << std::endl;
 
     return 0;
 }

@@ -1,6 +1,7 @@
+#include <matrixVectorMulC.hpp>
+
 #include <util.cuh>
-#include <matrixMul.cuh>
-#include <matrixMulC.hpp>
+#include <matrixVectorMul.cuh>
 
 void matrixVectorMul(const float *X_h, const float *y_h, float *z_h, unsigned rows, unsigned cols)
 {
@@ -19,9 +20,9 @@ void matrixVectorMul(const float *X_h, const float *y_h, float *z_h, unsigned ro
     cudaCheckErrors(cudaMemcpy(y_d, y_h, byteSizeY, cudaMemcpyHostToDevice));
 
     const unsigned blockDim = 256;
-    const unsigned gridDim = CEIL_DIV(rows, blockDim);
+    const unsigned gridDim = rows;
 
-    matrixVectorMul_naive_kernel<<<gridDim, blockDim>>>(X_d, y_d, z_d, rows, cols);
+    matrixVectorMul_warp_kernel<<<gridDim, blockDim>>>(X_d, y_d, z_d, rows, cols);
     cudaCheckErrors(cudaPeekAtLastError());
     cudaCheckErrors(cudaDeviceSynchronize());
 
