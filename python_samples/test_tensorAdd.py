@@ -41,7 +41,7 @@ def test_perf_tensor_add():
             globals={'x': x, 'y': y},
             label=label,
             sub_label=sub_label,
-            description='extension naive',
+            description='extension',
         ).blocked_autorange())
 
     compare = benchmark.Compare(results)

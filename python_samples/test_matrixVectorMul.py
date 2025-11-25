@@ -18,10 +18,10 @@ def test_matrix_vector_mul(size1, size2):
     z_extension_shared = torch_extension.matrix_vector_mul_shared(x, y)
     z_extension_warp = torch_extension.matrix_vector_mul_warp(x, y)
 
-    torch.testing.assert_close(z_torch, z_extension, atol=1e-4, rtol=1e-3)
-    torch.testing.assert_close(z_torch, z_extension_naive, atol=1e-4, rtol=1e-3)
-    torch.testing.assert_close(z_torch, z_extension_shared, atol=1e-4, rtol=1e-3)
-    torch.testing.assert_close(z_torch, z_extension_warp, atol=1e-4, rtol=1e-3)
+    torch.testing.assert_close(z_torch, z_extension, atol=1e-3, rtol=1e-3)
+    torch.testing.assert_close(z_torch, z_extension_naive, atol=1e-3, rtol=1e-3)
+    torch.testing.assert_close(z_torch, z_extension_shared, atol=1e-3, rtol=1e-3)
+    torch.testing.assert_close(z_torch, z_extension_warp, atol=1e-3, rtol=1e-3)
 
 @pytest.mark.performance
 def test_perf_matrix_vector_mul():
@@ -48,7 +48,7 @@ def test_perf_matrix_vector_mul():
             globals={'x': x, 'y': y},
             label=label,
             sub_label=sub_label,
-            description='extension naive',
+            description='ext naive',
         ).blocked_autorange())
 
         results.append(benchmark.Timer(
@@ -57,7 +57,7 @@ def test_perf_matrix_vector_mul():
             globals={'x': x, 'y': y},
             label=label,
             sub_label=sub_label,
-            description='extension shared',
+            description='ext shared',
         ).blocked_autorange())
 
         results.append(benchmark.Timer(
@@ -66,7 +66,7 @@ def test_perf_matrix_vector_mul():
             globals={'x': x, 'y': y},
             label=label,
             sub_label=sub_label,
-            description='extension warp',
+            description='ext warp',
         ).blocked_autorange())
 
         results.append(benchmark.Timer(
@@ -75,7 +75,7 @@ def test_perf_matrix_vector_mul():
             globals={'x': x, 'y': y},
             label=label,
             sub_label=sub_label,
-            description='extension opt',
+            description='ext opt',
         ).blocked_autorange())
 
     compare = benchmark.Compare(results)

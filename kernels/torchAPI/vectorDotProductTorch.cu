@@ -17,15 +17,18 @@ torch::Tensor vectorDotProduct(torch::Tensor x, torch::Tensor y)
     auto z = torch::zeros({}, x.options());
     const unsigned size = x.numel();
 
-    cudaDeviceProp prop;
-    cudaGetDeviceProperties(&prop, 0);
-    const unsigned maxThreadsCount = prop.multiProcessorCount * prop.maxThreadsPerMultiProcessor;
+    unsigned maxThreadsCount = 32U;
 
+    if(size > 2U * 256U * maxThreadsCount)
+    {
+        cudaDeviceProp prop;
+        cudaGetDeviceProperties(&prop, 0);
+        maxThreadsCount = prop.multiProcessorCount * prop.maxThreadsPerMultiProcessor;
+    }
     const unsigned blockDim = 256;
     const unsigned gridDim = std::min(CEIL_DIV(size, blockDim), maxThreadsCount);
 
-    vectorDotProduct_kernel<<<gridDim, blockDim>>>(x.data_ptr<float>(), y.data_ptr<float>(),
-     z.data_ptr<float>(), size);
+    vectorDotProduct_kernel<<<gridDim, blockDim>>>(x.data_ptr<float>(), y.data_ptr<float>(), z.data_ptr<float>(), size);
     C10_CUDA_KERNEL_LAUNCH_CHECK();
 
     return z;

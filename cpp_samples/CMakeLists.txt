@@ -17,3 +17,7 @@ target_link_libraries(vectorDotProduct PRIVATE cuda_ops)
 # Matrix X Vector multiplication kernel test sample
 add_executable(matrixVectorMul matrixVectorMul.cpp)
 target_link_libraries(matrixVectorMul PRIVATE cuda_ops)
+
+# Matrix X Matrix multiplication kernel test sample
+add_executable(matrixMul matrixMul.cpp)
+target_link_libraries(matrixMul PRIVATE cuda_ops)

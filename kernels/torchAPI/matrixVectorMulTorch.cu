@@ -20,7 +20,7 @@ static void launchMatrixVectorSharedKernel(const float *X, const float *y, float
 {
     const unsigned blockDim = 256;
     const unsigned gridDim = rows;
-    const size_t sharedSize = blockDim * sizeof(double);
+    const size_t sharedSize = blockDim * sizeof(float);
 
     matrixVectorMul_shared_kernel<<<gridDim, blockDim, sharedSize>>>(X, y, z, rows, cols);
     C10_CUDA_KERNEL_LAUNCH_CHECK();

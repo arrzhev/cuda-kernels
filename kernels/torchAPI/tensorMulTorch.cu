@@ -4,6 +4,7 @@
 #include <tensorMulTorch.hpp>
 #include <vectorDotProductTorch.hpp>
 #include <matrixVectorMulTorch.hpp>
+#include <matrixMulTorch.hpp>
 
 #include <util.cuh>
 
@@ -26,6 +27,10 @@ torch::Tensor tensorMul(torch::Tensor x, torch::Tensor y)
     else if(xDim == 2 && yDim == 1)
     {
         z = matrixVectorMul(x, y);
+    }
+    else if(xDim == 2 && yDim == 2)
+    {
+        z = matrixMul(x, y);
     }
     else
         TORCH_CHECK(false, "Not supported dimensions");

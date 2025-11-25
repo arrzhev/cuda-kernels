@@ -6,7 +6,7 @@ __global__ void vectorDotProduct_kernel(const float *x, const float *y, float *z
     const unsigned idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     const unsigned step = blockDim.x * gridDim.x;
-    double sum = 0.0f;
+    float sum = 0.0f;
 
     for (unsigned i = idx; i < size; i+= step)
             sum += x[i] * y[i];
@@ -14,5 +14,5 @@ __global__ void vectorDotProduct_kernel(const float *x, const float *y, float *z
     sum = blockReduceSum(sum);
 
     if(threadIdx.x == 0)
-        atomicAdd(z, static_cast<float>(sum));
+        atomicAdd(z, sum);
 }

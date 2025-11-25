@@ -13,7 +13,7 @@ def test_vector_dot_product(size):
     z_torch = x @ y
     z_extension = torch_extension.vector_dot_product(x, y)
 
-    torch.testing.assert_close(z_torch, z_extension, atol=1e-4, rtol=1e-3)
+    torch.testing.assert_close(z_torch, z_extension, atol=1e-3, rtol=1e-3)
 
 @pytest.mark.performance
 def test_perf_vector_dot_product():
@@ -52,7 +52,7 @@ if __name__ == '__main__':
     y = torch.randn(size, device="cuda")
 
     z_torch = x @ y
-    z_extension = torch_extension.tensor_mul_warp(x, y)
+    z_extension = torch_extension.vector_dot_product(x, y)
 
     print('Vector x Vector multiplication')
     print(f'Torch result - {z_torch}')

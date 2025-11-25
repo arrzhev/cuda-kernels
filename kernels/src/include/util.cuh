@@ -19,7 +19,7 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 template <typename T>
 __device__ __forceinline__ T warpReduceSum(T val)
 {
-    for (int offset = warpSize / 2; offset > 0; offset /= 2)
+    for (unsigned offset = warpSize >> 1; offset > 0; offset>>=1)
         val += __shfl_down_sync(0xffffffff, val, offset);
 
     return val;
@@ -28,16 +28,16 @@ __device__ __forceinline__ T warpReduceSum(T val)
 template <typename T>
 __device__ __forceinline__ T blockReduceSum(T val)
 {
-    __shared__ T smem[32]; // max possible size considering 1024 threads per block. 32 = 1024 / 32 (warp size)
+    __shared__ T smem[32U]; // max possible size considering 1024 threads per block. 32 = 1024 / 32 (warp size)
 
     val = warpReduceSum(val);
 
     if (blockDim.x > warpSize)
     {
-        int tid = threadIdx.x;
+        unsigned tid = threadIdx.x;
 
-        int lane = tid % warpSize;
-        int wid = tid / warpSize;
+        unsigned lane = tid % warpSize;
+        unsigned wid = tid / warpSize;
         if (lane == 0)
             smem[wid] = val;
 

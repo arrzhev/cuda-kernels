@@ -16,12 +16,11 @@ torch::Tensor tensorAdd(torch::Tensor x, torch::Tensor y)
 
     const unsigned size = x.numel();
     auto z = torch::empty_like(x);
-
+    
     const unsigned blockDim = 256;
     const unsigned gridDim = CEIL_DIV(size, blockDim);
 
-    vectorAdd_kernel<<<gridDim, blockDim>>>(x.data_ptr<float>(), y.data_ptr<float>(),
-     z.data_ptr<float>(), size);
+    vectorAdd_kernel<<<gridDim, blockDim>>>(x.data_ptr<float>(), y.data_ptr<float>(), z.data_ptr<float>(), size);
     C10_CUDA_KERNEL_LAUNCH_CHECK();
 
     return z;
