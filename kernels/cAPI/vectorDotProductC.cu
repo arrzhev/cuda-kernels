@@ -23,9 +23,10 @@ void vectorDotProduct(const float *x_h, const float *y_h, float *z_h, unsigned s
     const unsigned maxThreadsCount = prop.multiProcessorCount * prop.maxThreadsPerMultiProcessor;
 
     const unsigned blockDim = 256;
-    const unsigned gridDim = std::min(CEIL_DIV(size, blockDim), maxThreadsCount);
+    // when kernel with vectorized load is used each thread loads 4 elements -> multiply by 4
+    const unsigned gridDim = std::min(CEIL_DIV(size, 4 * blockDim), maxThreadsCount);
 
-    vectorDotProduct_kernel<<<gridDim, blockDim>>>(x_d, y_d, z_d, size);
+    vectorDotProduct4_kernel<<<gridDim, blockDim>>>(x_d, y_d, z_d, size);
     cudaCheckErrors(cudaPeekAtLastError());
     cudaCheckErrors(cudaDeviceSynchronize());
 

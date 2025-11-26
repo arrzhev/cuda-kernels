@@ -5,7 +5,7 @@ import torch.utils.benchmark as benchmark
 import torch_extension
 
 @pytest.mark.unit
-@pytest.mark.parametrize("size", [1, 10, 256, 1213, 4096, 8000])
+@pytest.mark.parametrize("size", [1, 10, 256, 1213, 4096, 8000, 12345])
 def test_vector_dot_product(size):
     x = torch.randn(size, device="cuda")
     y = torch.randn(size, device="cuda")
