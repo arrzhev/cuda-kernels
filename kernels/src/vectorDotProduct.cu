@@ -24,7 +24,7 @@ __global__ void vectorDotProduct4_kernel(const float *x, const float *y, float *
     const unsigned step = blockDim.x * gridDim.x;
     float sum = 0.0f;
 
-    unsigned size4 = size / 4;
+    const unsigned size4 = size / 4U;
     for (unsigned i = idx; i < size4; i+= step)
     {
         const float4 tmpX = reinterpret_cast<const float4*>(&x[i * 4U])[0];

@@ -16,12 +16,16 @@ def test_matrix_vector_mul(size1, size2):
     z_extension = torch_extension.matrix_vector_mul(x, y)
     z_extension_naive = torch_extension.matrix_vector_mul_naive(x, y)
     z_extension_shared = torch_extension.matrix_vector_mul_shared(x, y)
+    z_extension_shared4 = torch_extension.matrix_vector_mul_shared4(x, y)
     z_extension_warp = torch_extension.matrix_vector_mul_warp(x, y)
+    z_extension_warp4 = torch_extension.matrix_vector_mul_warp4(x, y)
 
     torch.testing.assert_close(z_torch, z_extension, atol=1e-3, rtol=1e-3)
     torch.testing.assert_close(z_torch, z_extension_naive, atol=1e-3, rtol=1e-3)
     torch.testing.assert_close(z_torch, z_extension_shared, atol=1e-3, rtol=1e-3)
+    torch.testing.assert_close(z_torch, z_extension_shared4, atol=1e-3, rtol=1e-3)
     torch.testing.assert_close(z_torch, z_extension_warp, atol=1e-3, rtol=1e-3)
+    torch.testing.assert_close(z_torch, z_extension_warp4, atol=1e-3, rtol=1e-3)
 
 @pytest.mark.performance
 def test_perf_matrix_vector_mul():
@@ -61,12 +65,30 @@ def test_perf_matrix_vector_mul():
         ).blocked_autorange())
 
         results.append(benchmark.Timer(
+            stmt='torch_extension.matrix_vector_mul_shared4(x, y)',
+            setup='import torch_extension',
+            globals={'x': x, 'y': y},
+            label=label,
+            sub_label=sub_label,
+            description='ext shared4',
+        ).blocked_autorange())
+
+        results.append(benchmark.Timer(
             stmt='torch_extension.matrix_vector_mul_warp(x, y)',
             setup='import torch_extension',
             globals={'x': x, 'y': y},
             label=label,
             sub_label=sub_label,
             description='ext warp',
+        ).blocked_autorange())
+
+        results.append(benchmark.Timer(
+            stmt='torch_extension.matrix_vector_mul_warp4(x, y)',
+            setup='import torch_extension',
+            globals={'x': x, 'y': y},
+            label=label,
+            sub_label=sub_label,
+            description='ext warp4',
         ).blocked_autorange())
 
         results.append(benchmark.Timer(

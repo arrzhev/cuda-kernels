@@ -19,7 +19,7 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 template <typename T>
 __device__ __forceinline__ T warpReduceSum(T val)
 {
-    for (unsigned offset = warpSize >> 1; offset > 0; offset>>=1)
+    for (unsigned offset = warpSize >> 1U; offset > 0U; offset>>=1U)
         val += __shfl_down_sync(0xffffffff, val, offset);
 
     return val;

@@ -21,8 +21,8 @@ void matrixVectorMul(const float *X_h, const float *y_h, float *z_h, unsigned ro
 
     const unsigned blockDim = 256;
     const unsigned gridDim = rows;
-
-    matrixVectorMul_warp_kernel<<<gridDim, blockDim>>>(X_d, y_d, z_d, rows, cols);
+    auto launchKernel = cols % 4U == 0U ? matrixVectorMul_warp4_kernel : matrixVectorMul_warp_kernel;
+    launchKernel<<<gridDim, blockDim>>>(X_d, y_d, z_d, rows, cols);
     cudaCheckErrors(cudaPeekAtLastError());
     cudaCheckErrors(cudaDeviceSynchronize());
 
