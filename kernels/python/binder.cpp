@@ -31,6 +31,7 @@ PYBIND11_MODULE(torch_extension, m)
     m.def("matrix_mul_tiled", &matrixMulTiled, "Cuda matrix multiplication function with tiled memory optimization");
     m.def("matrix_mul_tiled_1D", &matrixMulTiled1D, "Cuda matrix multiplication function with 1D tiled memory optimization");
     m.def("matrix_mul_tiled_2D", &matrixMulTiled2D, "Cuda matrix multiplication function with 2D tiled memory optimization");
+    m.def("matrix_mul_tiled4_2D", &matrixMulTiled2D4, "Cuda matrix multiplication function with vectorized 2D tiled memory optimization");
 
     m.def("tensor_mul", &tensorMul, "Cuda tensor multiplication function");
 }

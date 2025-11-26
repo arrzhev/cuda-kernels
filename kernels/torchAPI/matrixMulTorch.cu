@@ -62,6 +62,21 @@ static void launchMatMulTiled2DKernel(const float *A, const float *B, float *C, 
     C10_CUDA_KERNEL_LAUNCH_CHECK();
 };
 
+static void launchMatMulTiled2D4Kernel(const float *A, const float *B, float *C, unsigned M, unsigned N, unsigned K)
+{
+    constexpr unsigned BM = 128U;
+    constexpr unsigned BN = 128U;
+    constexpr unsigned BK = 8U;
+    constexpr unsigned TM = 8U;
+    constexpr unsigned TN = 8U;
+    const dim3 blockDim(BM * BN / (TM * TN));
+    const dim3 gridDim(CEIL_DIV(N, BN), CEIL_DIV(M, BM));
+
+    auto launchKernel = N % 4U == 0U && K % 4U == 0U ? matMul_tiled4_2D_kernel<BM, BN, BK, TM, TN> : matMul_tiled_2D_kernel<BM, BN, BK, TM, TN>;
+    launchKernel<<<gridDim, blockDim>>>(A, B, C, M, N, K);
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+};
+
 torch::Tensor matrixMul_(torch::Tensor x, torch::Tensor y, auto launchMatrixMulKernel)
 {
     CHECK_INPUT(x);
@@ -91,11 +106,11 @@ torch::Tensor matrixMul(torch::Tensor x, torch::Tensor y)
     const unsigned N = y.size(1);
     auto z = torch::empty({M, N}, x.options());
 
-    // const bool useOpt = M < 128U || N > 384U;
-    // if(useOpt)
-    //     launchMatrixVectorWarpKernel(x.data_ptr<float>(), y.data_ptr<float>(), z.data_ptr<float>(), rows, cols);
-    // else
-        launchMatMulTiledKernel(x.data_ptr<float>(), y.data_ptr<float>(), z.data_ptr<float>(), M, N, K);
+    const bool useOpt = M < 128U || N > 384U;
+    if(useOpt)
+        launchMatMulTiled2D4Kernel(x.data_ptr<float>(), y.data_ptr<float>(), z.data_ptr<float>(), M, N, K);
+    else
+        launchMatMulCoalescingKernel(x.data_ptr<float>(), y.data_ptr<float>(), z.data_ptr<float>(), M, N, K);
 
     return z;
 }
@@ -123,4 +138,9 @@ torch::Tensor matrixMulTiled1D(torch::Tensor x, torch::Tensor y)
 torch::Tensor matrixMulTiled2D(torch::Tensor x, torch::Tensor y)
 {
     return matrixMul_(x, y, launchMatMulTiled2DKernel);
+}
+
+torch::Tensor matrixMulTiled2D4(torch::Tensor x, torch::Tensor y)
+{
+    return matrixMul_(x, y, launchMatMulTiled2D4Kernel);
 }
