@@ -1,9 +1,13 @@
 #ifndef UTIL_KERNELS
 #define UTIL_KERNELS
 
+#include <concepts>
 #include <cstdio>
 
 #define CEIL_DIV(x, y) (((x) + (y) - 1) / (y))
+
+template <typename T, typename... AllowedTypes>
+concept IsAnyOf = (std::same_as<T, AllowedTypes> || ...);
 
 #define cudaCheckErrors(func) { gpuAssert(func, __FILE__, __LINE__); }
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
@@ -51,6 +55,31 @@ __device__ __forceinline__ T blockReduceSum(T val)
     }
 
     return val;
+}
+
+inline __host__ __device__ float4 operator*(float4 a, float4 b)
+{
+    return {a.x * b.x, a.y * b.y, a.z * b.z, a.w * b.w};
+}
+
+inline __host__ __device__ float4 operator+(float4 a, float4 b)
+{
+    return {a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w};
+}
+
+inline __host__ __device__ float4 operator-(float4 a, float4 b)
+{
+    return {a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w};
+}
+
+inline __host__ __device__ float dot(float a, float b)
+{
+    return a * b;
+}
+
+inline __host__ __device__ float dot(float4 a, float4 b)
+{
+    return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
 }
 
 #endif // UTIL_KERNELS

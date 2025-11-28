@@ -28,8 +28,8 @@ static void launchMatMulCoalescingKernel(const float *A, const float *B, float *
 static void launchMatMulTiledKernel(const float *A, const float *B, float *C, unsigned M, unsigned N, unsigned K)
 {
     constexpr unsigned tileSize = 16U;
-    const dim3 blockDim(tileSize, tileSize);
-    const dim3 gridDim(CEIL_DIV(N, blockDim.x), CEIL_DIV(M, blockDim.y));
+    const dim3 blockDim(tileSize * tileSize);
+    const dim3 gridDim(CEIL_DIV(N, tileSize), CEIL_DIV(M, tileSize));
 
     matMul_tiled_kernel<tileSize><<<gridDim, blockDim>>>(A, B, C, M, N, K);
     C10_CUDA_KERNEL_LAUNCH_CHECK();

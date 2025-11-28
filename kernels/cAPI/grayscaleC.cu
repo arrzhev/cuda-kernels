@@ -14,19 +14,9 @@ void rgb2gray(const unsigned char* src_h, unsigned char* dst_h, unsigned size, b
 
     cudaCheckErrors(cudaMemcpy(src_d, src_h, srcByteSize, cudaMemcpyHostToDevice));
 
-    const unsigned blockDim = 256;
-    const unsigned gridDim = CEIL_DIV(size, blockDim);
-    
-    if(isPlanar)
-    {
-        auto srcR_d = src_d;
-        auto srcG_d = srcR_d + size;
-        auto srcB_d = srcG_d + size;
-
-        rgb2grayPlanar_kernel<<<gridDim, blockDim>>>(srcR_d, srcG_d, srcB_d, dst_d, size);
-    }
-    else
-        rgb2grayInterleaved_kernel<<<gridDim, blockDim>>>(reinterpret_cast<const uchar3*>(src_d), dst_d, size);
+    constexpr unsigned blockDim = 256U;
+    auto launchFunction = isPlanar ? launch_rgb2grayPlanar<blockDim> : launch_rgb2grayInterleaved<blockDim>;
+    launchFunction(src_d, dst_d, size);
 
     cudaCheckErrors(cudaPeekAtLastError());
     cudaCheckErrors(cudaDeviceSynchronize());

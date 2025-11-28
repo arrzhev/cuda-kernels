@@ -1,13 +1,14 @@
 import pytest
 import torch
 import torch.utils.benchmark as benchmark
-import itertools
 
 import torch_extension
 
 @pytest.mark.unit
-@pytest.mark.parametrize("size1", [1, 10, 256, 1213, 4096, 8000])
-@pytest.mark.parametrize("size2", [1, 10, 256, 1213, 4096, 8000])
+@pytest.mark.parametrize("size1, size2", [(1, 1), (1, 10), (10, 1), (1, 1111), (1111, 1),
+                                          (10, 10), (10, 1111), (1111, 10), (1111, 1111),
+                                          (4096, 4096), (8000, 8000), (8001, 8001),
+                                         ])
 def test_matrix_vector_mul(size1, size2):
     x = torch.randn(size1, size2, device="cuda")
     y = torch.randn(size2, device="cuda")
@@ -16,23 +17,22 @@ def test_matrix_vector_mul(size1, size2):
     z_extension = torch_extension.matrix_vector_mul(x, y)
     z_extension_naive = torch_extension.matrix_vector_mul_naive(x, y)
     z_extension_shared = torch_extension.matrix_vector_mul_shared(x, y)
-    z_extension_shared4 = torch_extension.matrix_vector_mul_shared4(x, y)
     z_extension_warp = torch_extension.matrix_vector_mul_warp(x, y)
-    z_extension_warp4 = torch_extension.matrix_vector_mul_warp4(x, y)
 
     torch.testing.assert_close(z_torch, z_extension, atol=1e-3, rtol=1e-3)
     torch.testing.assert_close(z_torch, z_extension_naive, atol=1e-3, rtol=1e-3)
     torch.testing.assert_close(z_torch, z_extension_shared, atol=1e-3, rtol=1e-3)
-    torch.testing.assert_close(z_torch, z_extension_shared4, atol=1e-3, rtol=1e-3)
     torch.testing.assert_close(z_torch, z_extension_warp, atol=1e-3, rtol=1e-3)
-    torch.testing.assert_close(z_torch, z_extension_warp4, atol=1e-3, rtol=1e-3)
 
 @pytest.mark.performance
 def test_perf_matrix_vector_mul():
     results = []
-    sizes = [1, 10, 256, 512, 1213, 4096, 8000]
+    sizes = [(1, 1), (1, 10), (10, 1), (1, 1111), (1111, 1),
+             (10, 10), (10, 1111), (1111, 10), (1111, 1111),
+             (4096, 4096), (8000, 8000), (8001, 8001),
+            ]
 
-    for size1, size2 in itertools.product(sizes, sizes):
+    for size1, size2 in sizes:
         label = 'Matrix x Vector'
         sub_label = f'Matrix: {size1}x{size2}; Vector: {size2}'
         x = torch.randn(size1, size2, device="cuda")
@@ -65,30 +65,12 @@ def test_perf_matrix_vector_mul():
         ).blocked_autorange())
 
         results.append(benchmark.Timer(
-            stmt='torch_extension.matrix_vector_mul_shared4(x, y)',
-            setup='import torch_extension',
-            globals={'x': x, 'y': y},
-            label=label,
-            sub_label=sub_label,
-            description='ext shared4',
-        ).blocked_autorange())
-
-        results.append(benchmark.Timer(
             stmt='torch_extension.matrix_vector_mul_warp(x, y)',
             setup='import torch_extension',
             globals={'x': x, 'y': y},
             label=label,
             sub_label=sub_label,
             description='ext warp',
-        ).blocked_autorange())
-
-        results.append(benchmark.Timer(
-            stmt='torch_extension.matrix_vector_mul_warp4(x, y)',
-            setup='import torch_extension',
-            globals={'x': x, 'y': y},
-            label=label,
-            sub_label=sub_label,
-            description='ext warp4',
         ).blocked_autorange())
 
         results.append(benchmark.Timer(

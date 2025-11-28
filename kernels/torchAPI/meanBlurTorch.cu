@@ -28,24 +28,11 @@ torch::Tensor meanBlur(torch::Tensor image, const unsigned kernelSize)
 
     const auto src = image.data_ptr<unsigned char>();
     auto dst = blurredImage.data_ptr<unsigned char>();
-    const dim3 blockDim(16, 16);
-    const dim3 gridDim(CEIL_DIV(cols, blockDim.x), CEIL_DIV(rows, blockDim.y));
 
-    if(isColored)
-    {
-        const unsigned size = rows * cols;
-        const auto srcR = src;
-        const auto srcG = srcR + size;
-        const auto srcB = srcG + size;
-        auto dstR = dst;
-        auto dstG = dstR + size;
-        auto dstB = dstG + size;
-
-        meanBlurColor_kernel<<<gridDim, blockDim>>>(srcR, srcG, srcB, dstR, dstG, dstB, rows, cols, kernelRadius);
-    }
-    else
-        meanBlurGray_kernel<<<gridDim, blockDim>>>(src, dst, rows, cols, kernelRadius);
-
+    constexpr unsigned blockDimX = 16U;
+    constexpr unsigned blockDimY = 16U;
+    auto launchFunction = isColored ? launch_meanBlurColor<blockDimX, blockDimY> : launch_meanBlurGray<blockDimX, blockDimY>;
+    launchFunction(src, dst, rows, cols, kernelRadius);
     C10_CUDA_KERNEL_LAUNCH_CHECK();
 
     return blurredImage;

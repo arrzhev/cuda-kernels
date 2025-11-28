@@ -17,22 +17,10 @@ void meanBlur(const unsigned char* src_h, unsigned char* dst_h, unsigned rows, u
 
     cudaCheckErrors(cudaMemcpy(src_d, src_h, byteSize, cudaMemcpyHostToDevice));
 
-    const dim3 blockDim(16, 16);
-    const dim3 gridDim(CEIL_DIV(cols, blockDim.x), CEIL_DIV(rows, blockDim.y));
-
-    if(isColored)
-    {
-        const auto srcR_d = src_d;
-        const auto srcG_d = srcR_d + size;
-        const auto srcB_d = srcG_d + size;
-        auto dstR_d = dst_d;
-        auto dstG_d = dstR_d + size;
-        auto dstB_d = dstG_d + size;
-
-        meanBlurColor_kernel<<<gridDim, blockDim>>>(srcR_d, srcG_d, srcB_d, dstR_d, dstG_d, dstB_d, rows, cols, kernelRadius);
-    }
-    else
-        meanBlurGray_kernel<<<gridDim, blockDim>>>(src_d, dst_d, rows, cols, kernelRadius);
+    constexpr unsigned blockDimX = 16U;
+    constexpr unsigned blockDimY = 16U;
+    auto launchFunction = isColored ? launch_meanBlurColor<blockDimX, blockDimY> : launch_meanBlurGray<blockDimX, blockDimY>;
+    launchFunction(src_d, dst_d, rows, cols, kernelRadius);
 
     cudaCheckErrors(cudaPeekAtLastError());
     cudaCheckErrors(cudaDeviceSynchronize());

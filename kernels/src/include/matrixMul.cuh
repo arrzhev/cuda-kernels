@@ -9,11 +9,17 @@ __global__ void matMul_coalescing_kernel(const float *A, const float *B, float *
 template <const unsigned TILE_SIZE>
 __global__ void matMul_tiled_kernel(const float *A, const float *B, float *C, unsigned M, unsigned N, unsigned K)
 {
-    const unsigned ty = threadIdx.y;
-    const unsigned tx = threadIdx.x;
-
     const unsigned by = blockIdx.y;
     const unsigned bx = blockIdx.x;
+    
+    const unsigned aty = threadIdx.x / TILE_SIZE;
+    const unsigned atx = threadIdx.x % TILE_SIZE;
+
+    const unsigned bty = threadIdx.x / TILE_SIZE;
+    const unsigned btx = threadIdx.x % TILE_SIZE;
+
+    const unsigned ty = threadIdx.x / TILE_SIZE;
+    const unsigned tx = threadIdx.x % TILE_SIZE;
 
     const unsigned row = by * TILE_SIZE + ty;
     const unsigned col = bx * TILE_SIZE + tx;
@@ -23,17 +29,17 @@ __global__ void matMul_tiled_kernel(const float *A, const float *B, float *C, un
 
     float sum = 0.0f;
 
-    for (unsigned tileOffset = 0U; tileOffset < K; tileOffset+=TILE_SIZE)
+    for (unsigned tileOffset = 0U; tileOffset < K; tileOffset += TILE_SIZE)
     {
-        if (row < M && (tileOffset + tx) < K)
-            smemA[ty][tx] = A[row * K + tileOffset + tx];
+        if ((by * TILE_SIZE + aty) < M && (tileOffset + atx) < K)
+            smemA[aty][atx] = A[(by * TILE_SIZE + aty) * K + (tileOffset + atx)];
         else
-            smemA[ty][tx] = 0.0f;
+            smemA[aty][atx] = 0.0f;
 
-        if ((tileOffset + ty) < K && col < N)
-            smemB[ty][tx] = B[(tileOffset + ty) * N + col];
+        if ((tileOffset + bty) < K && (bx * TILE_SIZE + btx) < N)
+            smemB[bty][btx] = B[(tileOffset + bty) * N + (bx * TILE_SIZE + btx)];
         else
-            smemB[ty][tx] = 0.0f;
+            smemB[bty][btx] = 0.0f;
         __syncthreads();
 
         for (unsigned i = 0U; i < TILE_SIZE; ++i)
@@ -49,14 +55,17 @@ __global__ void matMul_tiled_kernel(const float *A, const float *B, float *C, un
 template <const unsigned BM, const unsigned BN, const unsigned BK, const unsigned TM>
 __global__ void matMul_tiled_1D_kernel(const float *A, const float *B, float *C, unsigned M, unsigned N, unsigned K)
 {
-    const unsigned ty = threadIdx.x / BN;
-    const unsigned tx = threadIdx.x % BN;
+    const unsigned by = blockIdx.y;
+    const unsigned bx = blockIdx.x;
 
     const unsigned aty = threadIdx.x / BK;
     const unsigned atx = threadIdx.x % BK;
 
-    const unsigned by = blockIdx.y;
-    const unsigned bx = blockIdx.x;
+    const unsigned bty = threadIdx.x / BN;
+    const unsigned btx = threadIdx.x % BN;
+
+    const unsigned ty = threadIdx.x / BN;
+    const unsigned tx = threadIdx.x % BN;
 
     const unsigned row = by * BM + ty * TM;
     const unsigned col = bx * BN + tx;
@@ -73,10 +82,10 @@ __global__ void matMul_tiled_1D_kernel(const float *A, const float *B, float *C,
         else
             smemA[aty][atx] = 0.0f;
 
-        if ((tileOffset + ty) < K && (bx * BN + tx) < N)
-            smemB[ty][tx] = B[(tileOffset + ty) * N + (bx * BN + tx)];
+        if ((tileOffset + bty) < K && (bx * BN + btx) < N)
+            smemB[bty][btx] = B[(tileOffset + bty) * N + (bx * BN + btx)];
         else
-            smemB[ty][tx] = 0.0f;
+            smemB[bty][btx] = 0.0f;
 
         __syncthreads();
 
@@ -168,20 +177,22 @@ __global__ void matMul_tiled_2D_kernel(const float *A, const float *B, float *C,
 template <const unsigned BM, const unsigned BN, const unsigned BK, const unsigned TM, const unsigned TN>
 __global__ void matMul_tiled4_2D_kernel(const float *A, const float *B, float *C, unsigned M, unsigned N, unsigned K)
 {
+    constexpr unsigned vecNum = 4U;
+
     const unsigned ty = threadIdx.x / (BN / TN);
     const unsigned tx = threadIdx.x % (BN / TN);
 
-    const unsigned aty = threadIdx.x / (BK / 4U);
-    const unsigned atx = threadIdx.x % (BK / 4U);
+    const unsigned aty = threadIdx.x / (BK / vecNum);
+    const unsigned atx = threadIdx.x % (BK / vecNum);
 
-    const unsigned bty = threadIdx.x / (BN / 4U);
-    const unsigned btx = threadIdx.x % (BN / 4U);
+    const unsigned bty = threadIdx.x / (BN / vecNum);
+    const unsigned btx = threadIdx.x % (BN / vecNum);
 
     const unsigned by = blockIdx.y;
     const unsigned bx = blockIdx.x;
 
-    const unsigned strideA = 4U * blockDim.x / BK;
-    const unsigned strideB = 4U * blockDim.x / BN;
+    const unsigned strideA = vecNum * blockDim.x / BK;
+    const unsigned strideB = vecNum * blockDim.x / BN;
 
     const unsigned row = by * BM + ty * TM;
     const unsigned col = bx * BN + tx * TN;
@@ -198,30 +209,30 @@ __global__ void matMul_tiled4_2D_kernel(const float *A, const float *B, float *C
         for (unsigned loadOffset = 0U; loadOffset < BM; loadOffset += strideA)
         {
             float4 tmpA = {0.0f};
-            if((by * BM + (aty + loadOffset)) < M && (tileOffset + 4U * atx) < K)
-                tmpA = reinterpret_cast<const float4*>(&A[(by * BM + (aty + loadOffset)) * K + (tileOffset + 4U * atx)])[0U];
-            smemA[4U * atx][aty + loadOffset] = tmpA.x;
-            smemA[4U * atx + 1U][aty + loadOffset] = tmpA.y;
-            smemA[4U * atx + 2U][aty + loadOffset] = tmpA.z;
-            smemA[4U * atx + 3U][aty + loadOffset] = tmpA.w;
+            if((by * BM + (aty + loadOffset)) < M && (tileOffset + vecNum * atx) < K)
+                tmpA = reinterpret_cast<const float4*>(&A[(by * BM + (aty + loadOffset)) * K + (tileOffset + vecNum * atx)])[0U];
+            smemA[vecNum * atx][aty + loadOffset] = tmpA.x;
+            smemA[vecNum * atx + 1U][aty + loadOffset] = tmpA.y;
+            smemA[vecNum * atx + 2U][aty + loadOffset] = tmpA.z;
+            smemA[vecNum * atx + 3U][aty + loadOffset] = tmpA.w;
         }
 
         for (unsigned loadOffset = 0U; loadOffset < BK; loadOffset += strideB)
         {
             float4 tmpB = {0.0f};
-            if((tileOffset + bty + loadOffset) < K && (bx * BN + 4U * btx) < N)
-                tmpB = reinterpret_cast<const float4*>(&B[(tileOffset + bty + loadOffset) * N + (bx * BN + 4U * btx)])[0U];
-            reinterpret_cast<float4*>(&smemB[bty + loadOffset][4U * btx])[0U] = tmpB;
+            if((tileOffset + bty + loadOffset) < K && (bx * BN + vecNum * btx) < N)
+                tmpB = reinterpret_cast<const float4*>(&B[(tileOffset + bty + loadOffset) * N + (bx * BN + vecNum * btx)])[0U];
+            reinterpret_cast<float4*>(&smemB[bty + loadOffset][vecNum * btx])[0U] = tmpB;
         }
 
         __syncthreads();
 
         for (unsigned i = 0U; i < BK; ++i)
         {
-            for (unsigned m = 0U; m < TM; m+=4U)
+            for (unsigned m = 0U; m < TM; m+=vecNum)
                 reinterpret_cast<float4*>(&regM[m])[0U] = reinterpret_cast<float4*>(&smemA[i][ty * TM + m])[0U];
 
-            for (unsigned n = 0U; n < TN; n+=4U)
+            for (unsigned n = 0U; n < TN; n+=vecNum)
                 reinterpret_cast<float4*>(&regN[n])[0U] = reinterpret_cast<float4*>(&smemB[i][tx * TN + n])[0U];
 
             for (unsigned m = 0U; m < TM; ++m)
@@ -236,7 +247,7 @@ __global__ void matMul_tiled4_2D_kernel(const float *A, const float *B, float *C
 
     for (unsigned m = 0U; m < TM; ++m)
     {
-        for (unsigned n = 0U; n < TN; n+=4U)
+        for (unsigned n = 0U; n < TN; n+=vecNum)
         {
             if((row + m) < M && col + n < N)
                 reinterpret_cast<float4*>(&C[(row + m) * N + col + n])[0U] = reinterpret_cast<float4*>(&sums[m][n])[0U];

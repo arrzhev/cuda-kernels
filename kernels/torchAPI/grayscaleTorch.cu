@@ -24,37 +24,26 @@ torch::Tensor rgb2gray(torch::Tensor rgbImage)
     auto src = rgbImage.data_ptr<unsigned char>();
     auto dst = grayImage.data_ptr<unsigned char>();
 
-    const bool isContiguous = rgbImage.is_contiguous();
-    if(isContiguous)
+    if(rgbImage.is_contiguous())
     {
         const unsigned size = rows * cols;
-        const unsigned blockDim = 256;
-        const unsigned gridDim = CEIL_DIV(size, blockDim);
-        
-        if(isPlanar)
-        {
-            auto srcR = src;
-            auto srcG = srcR + size;
-            auto srcB = srcG + size;
+        constexpr unsigned blockDim = 256U;
 
-            rgb2grayPlanar_kernel<<<gridDim, blockDim>>>(srcR, srcG, srcB, dst, size);
-        }
-        else
-            rgb2grayInterleaved_kernel<<<gridDim, blockDim>>>(reinterpret_cast<const uchar3*>(src), dst, size);
+        auto launchFunction = isPlanar ? launch_rgb2grayPlanar<blockDim> : launch_rgb2grayInterleaved<blockDim>;
+        launchFunction(src, dst, size);
+        C10_CUDA_KERNEL_LAUNCH_CHECK();
     }
     else
     {
-        const dim3 blockDim(16, 16);
-        const dim3 gridDim(CEIL_DIV(cols, blockDim.x), CEIL_DIV(rows, blockDim.y));
-
-        int64_t rowStride = isInterleaved ? rgbImage.stride(0) : rgbImage.stride(1);
-        int64_t colStride = isInterleaved ? rgbImage.stride(1) : rgbImage.stride(2);
-        int64_t channelStride = isInterleaved ? rgbImage.stride(2) : rgbImage.stride(0);
-
-        rgb2grayStrides_kernel<<<gridDim, blockDim>>>(src, dst, rows, cols, rowStride, colStride, channelStride);
+        const unsigned rowStride = isInterleaved ? rgbImage.stride(0) : rgbImage.stride(1);
+        const unsigned colStride = isInterleaved ? rgbImage.stride(1) : rgbImage.stride(2);
+        const unsigned channelStride = isInterleaved ? rgbImage.stride(2) : rgbImage.stride(0);
+        
+        constexpr unsigned blockDimX = 16U;
+        constexpr unsigned blockDimY = 16U;
+        launch_rgb2grayStrides<blockDimX, blockDimY>(src, dst, rows, cols, rowStride, colStride, channelStride);
+        C10_CUDA_KERNEL_LAUNCH_CHECK();
     }
-
-    C10_CUDA_KERNEL_LAUNCH_CHECK();
 
     return grayImage;
 }

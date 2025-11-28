@@ -21,9 +21,7 @@ PYBIND11_MODULE(torch_extension, m)
     m.def("matrix_vector_mul", &matrixVectorMul, "Cuda matrix vector multiplication function");
     m.def("matrix_vector_mul_naive", &matrixVectorMulNaive, "Cuda naive matrix vector multiplication function");
     m.def("matrix_vector_mul_shared", &matrixVectorMulShared, "Cuda matrix vector multiplication function with shared memory optimization");
-    m.def("matrix_vector_mul_shared4", &matrixVectorMulShared4, "Cuda matrix vector multiplication function with vectorized shared memory optimization");
     m.def("matrix_vector_mul_warp", &matrixVectorMulWarp, "Cuda matrix vector multiplication function with warp optimization");
-    m.def("matrix_vector_mul_warp4", &matrixVectorMulWarp4, "Cuda matrix vector multiplication function with vectorized warp optimization");
 
     m.def("matrix_mul", &matrixMul, "Cuda matrix multiplication function");
     m.def("matrix_mul_naive", &matrixMulNaive, "Cuda naive matrix multiplication function");

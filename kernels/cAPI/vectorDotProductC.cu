@@ -18,15 +18,17 @@ void vectorDotProduct(const float *x_h, const float *y_h, float *z_h, unsigned s
     cudaCheckErrors(cudaMemcpy(y_d, y_h, byteSize, cudaMemcpyHostToDevice));
     cudaCheckErrors(cudaMemset(z_d, 0, sizeof(float)));
 
-    cudaDeviceProp prop;
-    cudaGetDeviceProperties(&prop, 0);
-    const unsigned maxThreadsCount = prop.multiProcessorCount * prop.maxThreadsPerMultiProcessor;
+    unsigned maxThreadsCount = 32U;
+    if(size > 2U * 256U * maxThreadsCount)
+    {
+        cudaDeviceProp prop;
+        cudaGetDeviceProperties(&prop, 0);
+        maxThreadsCount = prop.multiProcessorCount * prop.maxThreadsPerMultiProcessor;
+    }
 
-    const unsigned blockDim = 256;
-    // when kernel with vectorized load is used each thread loads 4 elements -> multiply by 4
-    const unsigned gridDim = std::min(CEIL_DIV(size, 4U * blockDim), maxThreadsCount);
+    constexpr unsigned blockDim = 256U;
+    launch_vectorDotProduct<blockDim>(x_d, y_d, z_d, size, maxThreadsCount);
 
-    vectorDotProduct4_kernel<<<gridDim, blockDim>>>(x_d, y_d, z_d, size);
     cudaCheckErrors(cudaPeekAtLastError());
     cudaCheckErrors(cudaDeviceSynchronize());
 

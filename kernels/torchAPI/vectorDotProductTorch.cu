@@ -18,18 +18,15 @@ torch::Tensor vectorDotProduct(torch::Tensor x, torch::Tensor y)
     const unsigned size = x.numel();
 
     unsigned maxThreadsCount = 32U;
-
     if(size > 2U * 256U * maxThreadsCount)
     {
         cudaDeviceProp prop;
         cudaGetDeviceProperties(&prop, 0);
         maxThreadsCount = prop.multiProcessorCount * prop.maxThreadsPerMultiProcessor;
     }
-    const unsigned blockDim = 256;
-    // when kernel with vectorized load is used each thread loads 4 elements -> multiply by 4
-    const unsigned gridDim = std::min(CEIL_DIV(size, 4U * blockDim), maxThreadsCount);
 
-    vectorDotProduct4_kernel<<<gridDim, blockDim>>>(x.data_ptr<float>(), y.data_ptr<float>(), z.data_ptr<float>(), size);
+    constexpr unsigned blockDim = 256U;
+    launch_vectorDotProduct<blockDim>(x.data_ptr<float>(), y.data_ptr<float>(), z.data_ptr<float>(), size, maxThreadsCount);
     C10_CUDA_KERNEL_LAUNCH_CHECK();
 
     return z;

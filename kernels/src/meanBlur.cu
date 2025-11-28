@@ -10,19 +10,12 @@ __global__ void meanBlurGray_kernel(const unsigned char* src, unsigned char* dst
     {
         float sum = 0.0f;
         float count = 0.0f;
-        for (int i = -kernelRadius; i <= kernelRadius; ++i)
+        for (int i = max(0, row - kernelRadius); i <= min(rows-1, row + kernelRadius); ++i)
         {
-            for (int j = -kernelRadius; j <= kernelRadius; ++j)
+            for (int j = max(0, col - kernelRadius); j <= min(cols - 1, col + kernelRadius); ++j)
             {
-                const int neighborRow = row + i;
-                const int neighborCol = col + j;
-
-                if (neighborRow >= 0 && neighborRow < rows && 
-                    neighborCol >= 0 && neighborCol < cols)
-                {
-                    sum += src[neighborRow * cols + neighborCol];
-                    count++;
-                }
+                sum += src[i * cols + j];
+                count++;
             }
         }
 
@@ -44,22 +37,15 @@ __global__ void meanBlurColor_kernel(const unsigned char* srcR, const unsigned c
         float sumB = 0.0f;
         float count = 0.0f;
 
-        for (int i = -kernelRadius; i <= kernelRadius; ++i)
+        for (int i = max(0, row - kernelRadius); i <= min(rows-1, row + kernelRadius); ++i)
         {
-            for (int j = -kernelRadius; j <= kernelRadius; ++j)
+            for (int j = max(0, col - kernelRadius); j <= min(cols - 1, col + kernelRadius); ++j)
             {
-                const int neighborRow = row + i;
-                const int neighborCol = col + j;
-
-                if (neighborRow >= 0 && neighborRow < rows && 
-                    neighborCol >= 0 && neighborCol < cols)
-                {
-                    const unsigned neighborIndex = neighborRow * cols + neighborCol;
-                    sumR += srcR[neighborIndex];
-                    sumG += srcG[neighborIndex];
-                    sumB += srcB[neighborIndex];
-                    count++;
-                }
+                const unsigned neighborIndex = i * cols + j;
+                sumR += srcR[neighborIndex];
+                sumG += srcG[neighborIndex];
+                sumB += srcB[neighborIndex];
+                count++;
             }
         }
 

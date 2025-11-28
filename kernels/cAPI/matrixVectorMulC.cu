@@ -19,10 +19,11 @@ void matrixVectorMul(const float *X_h, const float *y_h, float *z_h, unsigned ro
     cudaCheckErrors(cudaMemcpy(X_d, X_h, byteSizeX, cudaMemcpyHostToDevice));
     cudaCheckErrors(cudaMemcpy(y_d, y_h, byteSizeY, cudaMemcpyHostToDevice));
 
-    const unsigned blockDim = 256;
-    const unsigned gridDim = rows;
-    auto launchKernel = cols % 4U == 0U ? matrixVectorMul_warp4_kernel : matrixVectorMul_warp_kernel;
-    launchKernel<<<gridDim, blockDim>>>(X_d, y_d, z_d, rows, cols);
+    constexpr unsigned blockDim = 256U;
+    const bool useOpt = rows < 128U || cols > 384U;
+    auto launchKernel = useOpt ? launch_matrixVectorMul_warp<blockDim> : launch_matrixVectorMul_naive<blockDim>;
+    launchKernel(X_d, y_d, z_d, rows, cols);
+
     cudaCheckErrors(cudaPeekAtLastError());
     cudaCheckErrors(cudaDeviceSynchronize());
 

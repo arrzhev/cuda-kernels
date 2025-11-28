@@ -1,12 +1,13 @@
 import pytest
 import torch
 import torch.utils.benchmark as benchmark
-import itertools
 
 import torch_extension
 
 @pytest.mark.unit
-@pytest.mark.parametrize("M, N, K", [(1, 1, 1), (1, 1, 1234), (1, 1234, 1), (1234, 1, 1), (10, 10, 10), (64, 64, 64), (256,256, 256)])
+@pytest.mark.parametrize("M, N, K", [(1, 1, 1), (1, 1, 1234), (1, 1234, 1), (1234, 1, 1),
+                                     (10, 10, 10), (64, 64, 64), (256,256, 256), (257, 257, 257)
+                                    ])
 def test_matrix_mul(M, N, K):
     x = torch.randn(M, K, device="cuda")
     y = torch.randn(K, N, device="cuda")
@@ -32,7 +33,8 @@ def test_matrix_mul(M, N, K):
 def test_perf_matrix_mul():
     results = []
 
-    for M, N, K in [(1, 1, 1), (1, 1, 1234), (1, 1234, 1), (1234, 1, 1), (10, 10, 10), (64, 64, 64), (256,256, 256), (512, 512, 512)]:
+    for M, N, K in [(1, 1, 1), (1, 1, 1234), (1, 1234, 1), (1234, 1, 1),
+                    (10, 10, 10), (64, 64, 64), (256,256, 256), (512, 512, 512), (513, 513, 513)]:
         label = 'Matrix Mul'
         sub_label = f'Matrix1: {M}x{K}; Matrix2: {K}x{N}'
         x = torch.randn(M, K, device="cuda")
