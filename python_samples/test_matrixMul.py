@@ -19,7 +19,6 @@ def test_matrix_mul(M, N, K):
     z_extension_tiled = torch_extension.matrix_mul_tiled(x, y)
     z_extension_tiled_1D = torch_extension.matrix_mul_tiled_1D(x, y)
     z_extension_tiled_2D = torch_extension.matrix_mul_tiled_2D(x, y)
-    z_extension_tiled4_2D = torch_extension.matrix_mul_tiled4_2D(x, y)
 
     torch.testing.assert_close(z_torch, z_extension, atol=1e-3, rtol=1e-3)
     torch.testing.assert_close(z_torch, z_extension_naive, atol=1e-3, rtol=1e-3)
@@ -27,7 +26,6 @@ def test_matrix_mul(M, N, K):
     torch.testing.assert_close(z_torch, z_extension_tiled, atol=1e-3, rtol=1e-3)
     torch.testing.assert_close(z_torch, z_extension_tiled_1D, atol=1e-3, rtol=1e-3)
     torch.testing.assert_close(z_torch, z_extension_tiled_2D, atol=1e-3, rtol=1e-3)
-    torch.testing.assert_close(z_torch, z_extension_tiled4_2D, atol=1e-3, rtol=1e-3)
 
 @pytest.mark.performance
 def test_perf_matrix_mul():
@@ -91,15 +89,6 @@ def test_perf_matrix_mul():
             label=label,
             sub_label=sub_label,
             description='ext tiled 2D',
-        ).blocked_autorange())
-
-        results.append(benchmark.Timer(
-            stmt='torch_extension.matrix_mul_tiled4_2D(x, y)',
-            setup='import torch_extension',
-            globals={'x': x, 'y': y},
-            label=label,
-            sub_label=sub_label,
-            description='ext tiled4 2D',
         ).blocked_autorange())
 
         # results.append(benchmark.Timer(

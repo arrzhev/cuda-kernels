@@ -7,76 +7,6 @@
 
 #include "common.cuh"
 
-static void launchMatMulNaiveKernel(const float *A, const float *B, float *C, unsigned M, unsigned N, unsigned K)
-{
-    const dim3 blockDim(16, 16);
-    const dim3 gridDim(CEIL_DIV(M, blockDim.x), CEIL_DIV(N, blockDim.y));
-
-    matMul_naive_kernel<<<gridDim, blockDim>>>(A, B, C, M, N, K);
-    C10_CUDA_KERNEL_LAUNCH_CHECK();
-};
-
-static void launchMatMulCoalescingKernel(const float *A, const float *B, float *C, unsigned M, unsigned N, unsigned K)
-{
-    const dim3 blockDim(16, 16);
-    const dim3 gridDim(CEIL_DIV(N, blockDim.x), CEIL_DIV(M, blockDim.y));
-
-    matMul_coalescing_kernel<<<gridDim, blockDim>>>(A, B, C, M, N, K);
-    C10_CUDA_KERNEL_LAUNCH_CHECK();
-};
-
-static void launchMatMulTiledKernel(const float *A, const float *B, float *C, unsigned M, unsigned N, unsigned K)
-{
-    constexpr unsigned tileSize = 16U;
-    const dim3 blockDim(tileSize * tileSize);
-    const dim3 gridDim(CEIL_DIV(N, tileSize), CEIL_DIV(M, tileSize));
-
-    matMul_tiled_kernel<tileSize><<<gridDim, blockDim>>>(A, B, C, M, N, K);
-    C10_CUDA_KERNEL_LAUNCH_CHECK();
-};
-
-static void launchMatMulTiled1DKernel(const float *A, const float *B, float *C, unsigned M, unsigned N, unsigned K)
-{
-    constexpr unsigned BM = 32U;
-    constexpr unsigned BN = 32U;
-    constexpr unsigned BK = 4U;
-    constexpr unsigned TM = 8U;
-    const dim3 blockDim(BM * BN / TM);
-    const dim3 gridDim(CEIL_DIV(N, BN), CEIL_DIV(M, BM));
-
-    matMul_tiled_1D_kernel<BM, BN, BK, TM><<<gridDim, blockDim>>>(A, B, C, M, N, K);
-    C10_CUDA_KERNEL_LAUNCH_CHECK();
-};
-
-static void launchMatMulTiled2DKernel(const float *A, const float *B, float *C, unsigned M, unsigned N, unsigned K)
-{
-    constexpr unsigned BM = 128U;
-    constexpr unsigned BN = 128U;
-    constexpr unsigned BK = 8U;
-    constexpr unsigned TM = 8U;
-    constexpr unsigned TN = 8U;
-    const dim3 blockDim(BM * BN / (TM * TN));
-    const dim3 gridDim(CEIL_DIV(N, BN), CEIL_DIV(M, BM));
-
-    matMul_tiled_2D_kernel<BM, BN, BK, TM, TN><<<gridDim, blockDim>>>(A, B, C, M, N, K);
-    C10_CUDA_KERNEL_LAUNCH_CHECK();
-};
-
-static void launchMatMulTiled2D4Kernel(const float *A, const float *B, float *C, unsigned M, unsigned N, unsigned K)
-{
-    constexpr unsigned BM = 128U;
-    constexpr unsigned BN = 128U;
-    constexpr unsigned BK = 8U;
-    constexpr unsigned TM = 8U;
-    constexpr unsigned TN = 8U;
-    const dim3 blockDim(BM * BN / (TM * TN));
-    const dim3 gridDim(CEIL_DIV(N, BN), CEIL_DIV(M, BM));
-
-    auto launchKernel = N % 4U == 0U && K % 4U == 0U ? matMul_tiled4_2D_kernel<BM, BN, BK, TM, TN> : matMul_tiled_2D_kernel<BM, BN, BK, TM, TN>;
-    launchKernel<<<gridDim, blockDim>>>(A, B, C, M, N, K);
-    C10_CUDA_KERNEL_LAUNCH_CHECK();
-};
-
 torch::Tensor matrixMul_(torch::Tensor x, torch::Tensor y, auto launchMatrixMulKernel)
 {
     CHECK_INPUT(x);
@@ -90,6 +20,7 @@ torch::Tensor matrixMul_(torch::Tensor x, torch::Tensor y, auto launchMatrixMulK
     auto z = torch::empty({M, N}, x.options());
 
     launchMatrixMulKernel(x.data_ptr<float>(), y.data_ptr<float>(), z.data_ptr<float>(), M, N, K);
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
 
     return z;
 }
@@ -106,41 +37,58 @@ torch::Tensor matrixMul(torch::Tensor x, torch::Tensor y)
     const unsigned N = y.size(1);
     auto z = torch::empty({M, N}, x.options());
 
-    const bool useOpt = M < 128U || N > 384U;
+    const bool useOpt = M > 128U && N > 128U;
+
     if(useOpt)
-        launchMatMulTiled2D4Kernel(x.data_ptr<float>(), y.data_ptr<float>(), z.data_ptr<float>(), M, N, K);
+        launch_matMul_tiled(x.data_ptr<float>(), y.data_ptr<float>(), z.data_ptr<float>(), M, N, K);
     else
-        launchMatMulCoalescingKernel(x.data_ptr<float>(), y.data_ptr<float>(), z.data_ptr<float>(), M, N, K);
+        launch_matMul_coalescing(x.data_ptr<float>(), y.data_ptr<float>(), z.data_ptr<float>(), M, N, K);
+
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
 
     return z;
 }
 
 torch::Tensor matrixMulNaive(torch::Tensor x, torch::Tensor y)
-{   
-    return matrixMul_(x, y, launchMatMulNaiveKernel);
+{
+    constexpr unsigned blockDim = 16U;
+
+    return matrixMul_(x, y, launch_matMul_naive<blockDim, blockDim>);
 }
 
 torch::Tensor matrixMulCoalescing(torch::Tensor x, torch::Tensor y)
 {
-    return matrixMul_(x, y, launchMatMulCoalescingKernel);
+    constexpr unsigned blockDim = 16U;
+
+    return matrixMul_(x, y, launch_matMul_coalescing<blockDim, blockDim>);
 }
 
 torch::Tensor matrixMulTiled(torch::Tensor x, torch::Tensor y)
 {
-    return matrixMul_(x, y, launchMatMulTiledKernel);
+    constexpr unsigned BM = 16U;
+    constexpr unsigned BN = 16U;
+    constexpr unsigned BK = 16U;
+
+    return matrixMul_(x, y, launch_matMul_tiled<BM,BN, BK>);
 }
 
 torch::Tensor matrixMulTiled1D(torch::Tensor x, torch::Tensor y)
 {
-    return matrixMul_(x, y, launchMatMulTiled1DKernel);
+    constexpr unsigned BM = 64U;
+    constexpr unsigned BN = 64U;
+    constexpr unsigned BK = 16U;
+    constexpr unsigned TM = 16U;
+
+    return matrixMul_(x, y, launch_matMul_tiled_1D<BM, BN, BK, TM>);
 }
 
 torch::Tensor matrixMulTiled2D(torch::Tensor x, torch::Tensor y)
 {
-    return matrixMul_(x, y, launchMatMulTiled2DKernel);
-}
+    constexpr unsigned BM = 128U;
+    constexpr unsigned BN = 128U;
+    constexpr unsigned BK = 8U;
+    constexpr unsigned TM = 8U;
+    constexpr unsigned TN = 8U;
 
-torch::Tensor matrixMulTiled2D4(torch::Tensor x, torch::Tensor y)
-{
-    return matrixMul_(x, y, launchMatMulTiled2D4Kernel);
+    return matrixMul_(x, y, launch_matMul_tiled_2D<BM, BN, BK, TM, TN>);
 }

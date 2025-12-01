@@ -19,15 +19,12 @@ void matrixMul(const float *A_h, const float *B_h, float *C_h, unsigned M, unsig
     cudaCheckErrors(cudaMemcpy(A_d, A_h, byteSizeA, cudaMemcpyHostToDevice));
     cudaCheckErrors(cudaMemcpy(B_d, B_h, byteSizeB, cudaMemcpyHostToDevice));
 
-    constexpr unsigned BM = 128U;
-    constexpr unsigned BN = 128U;
-    constexpr unsigned BK = 8U;
-    constexpr unsigned TM = 8U;
-    constexpr unsigned TN = 8U;
-    const dim3 blockDim(BM * BN / (TM * TN));
-    const dim3 gridDim(CEIL_DIV(N, BN), CEIL_DIV(M, BM));
+    const bool useOpt = M > 128U && N > 128U;
+    if(useOpt)
+        launch_matMul_tiled_2D(A_d, B_d, C_d, M, N, K);
+    else
+        launch_matMul_coalescing(A_d, B_d, C_d, M, N, K);
 
-    matMul_tiled_2D_kernel<BM, BN, BK, TM, TN><<<gridDim, blockDim>>>(A_d, B_d, C_d, M, N, K);
     cudaCheckErrors(cudaPeekAtLastError());
     cudaCheckErrors(cudaDeviceSynchronize());
 

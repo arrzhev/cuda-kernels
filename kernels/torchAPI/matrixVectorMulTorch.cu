@@ -11,7 +11,7 @@ torch::Tensor matrixVectorMul_(torch::Tensor x, torch::Tensor y, auto launchMatr
 {
     CHECK_INPUT(x);
     CHECK_INPUT(y);
-    TORCH_CHECK(x.dim() == 2 && y.dim() == 1, "x and y tensors must have dimensions equal to 1");
+    TORCH_CHECK(x.dim() == 2 && y.dim() == 1, "x tensor must have 2 dimensions and y must have 1");
     TORCH_CHECK(x.size(1) == y.size(0), "x and y tensors must have the same cols count");
     
     const unsigned rows = x.size(0);
@@ -26,6 +26,8 @@ torch::Tensor matrixVectorMul_(torch::Tensor x, torch::Tensor y, auto launchMatr
 
 torch::Tensor matrixVectorMul(torch::Tensor x, torch::Tensor y)
 {
+    TORCH_CHECK(x.dim() == 2 && y.dim() == 1, "x tensor must have 2 dimensions and y must have 1");
+
     const unsigned rows = x.size(0);
     const unsigned cols = x.size(1);
 
