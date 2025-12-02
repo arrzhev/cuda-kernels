@@ -1,7 +1,7 @@
-#include <matrixMul.cuh>
+#include <matmul.cuh>
 #include <util.cuh>
 
-__global__ void matMul_naive_kernel(const float *A, const float *B, float *C, unsigned M, unsigned N, unsigned K)
+__global__ void matmul_naive_kernel(const float *A, const float *B, float *C, unsigned M, unsigned N, unsigned K)
 {
     const unsigned row = blockIdx.x * blockDim.x + threadIdx.x;
     const unsigned col = blockIdx.y * blockDim.y + threadIdx.y;
@@ -15,7 +15,7 @@ __global__ void matMul_naive_kernel(const float *A, const float *B, float *C, un
     }
 }
 
-__global__ void matMul_coalescing_kernel(const float *A, const float *B, float *C, unsigned M, unsigned N, unsigned K)
+__global__ void matmul_coalescing_kernel(const float *A, const float *B, float *C, unsigned M, unsigned N, unsigned K)
 {
     const unsigned col = blockIdx.x * blockDim.x + threadIdx.x;
     const unsigned row = blockIdx.y * blockDim.y + threadIdx.y;

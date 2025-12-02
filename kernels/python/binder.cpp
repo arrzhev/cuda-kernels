@@ -5,7 +5,7 @@
 #include <meanBlurTorch.hpp>
 #include <vectorDotProductTorch.hpp>
 #include <matrixVectorMulTorch.hpp>
-#include <matrixMulTorch.hpp>
+#include <matmulTorch.hpp>
 #include <tensorMulTorch.hpp>
 
 PYBIND11_MODULE(torch_extension, m) 
@@ -23,12 +23,17 @@ PYBIND11_MODULE(torch_extension, m)
     m.def("matrix_vector_mul_shared", &matrixVectorMulShared, "Cuda matrix vector multiplication function with shared memory optimization");
     m.def("matrix_vector_mul_warp", &matrixVectorMulWarp, "Cuda matrix vector multiplication function with warp optimization");
 
-    m.def("matrix_mul", &matrixMul, "Cuda matrix multiplication function");
-    m.def("matrix_mul_naive", &matrixMulNaive, "Cuda naive matrix multiplication function");
-    m.def("matrix_mul_coalescing", &matrixMulCoalescing, "Cuda matrix multiplication function with coalescing memory optimization");
-    m.def("matrix_mul_tiled", &matrixMulTiled, "Cuda matrix multiplication function with tiled memory optimization");
-    m.def("matrix_mul_tiled_1D", &matrixMulTiled1D, "Cuda matrix multiplication function with 1D tiled memory optimization");
-    m.def("matrix_mul_tiled_2D", &matrixMulTiled2D, "Cuda matrix multiplication function with 2D tiled memory optimization");
+    m.def("matmul", &matrixMul, "Cuda matmul Optimized function");
+    m.def("matmul_naive", &matmulNaive, "Cuda matmul Naive function");
+    m.def("matmul_coalescing", &matmulCoalescing, "Cuda matmul function with Coalescing memory optimization");
+    m.def("matmul_BTiles", &matmulBTiles, "Cuda matmul function with Block tiles memory optimization");
+    m.def("matmul_BTiles_DBuf", &matmulBTilesDBuf, "Cuda matmul function with Block tiles and Double buffer memory optimizations");
+    m.def("matmul_TTiles_1D", &matmulTTiles1D, "Cuda matmul function with Thread tiles 1D memory optimization");
+    m.def("matmul_TTiles_1D_DBuf", &matmulTTiles1DDBuf, "Cuda matmul function with Thread tiles 1D and Double buffer memory optimizations");
+    m.def("matmul_TTiles_2D", &matmulTTiles2D, "Cuda matmul function with Thread tiles 2D memory optimization");
+    m.def("matmul_TTiles_2D_DBuf", &matmulTTiles2DDBuf, "Cuda matmul function with Thread tiles 2D and Double buffer memory optimizations");
+    m.def("matmul_TTiles_2D_vec", &matmulTTiles2DVec, "Cuda matmul function with Vectorized Thread tiles 2D memory optimization");
+    m.def("matmul_TTiles_2D_DBuf_vec", &matmulTTiles2DDBufVec, "Cuda matmul function with Vectorized Thread tiles 2D and Double buffer memory optimization");
 
     m.def("tensor_mul", &tensorMul, "Cuda tensor multiplication function");
 }

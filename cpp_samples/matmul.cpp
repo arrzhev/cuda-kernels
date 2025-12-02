@@ -6,7 +6,7 @@
 #include <cmath>
 #include <assert.h>
 
-#include <matrixMulC.hpp>
+#include <matmulC.hpp>
 #include "common.hpp"
 
 int main(int argc, char **argv)

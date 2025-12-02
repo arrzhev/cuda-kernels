@@ -4,7 +4,7 @@
 #include <tensorMulTorch.hpp>
 #include <vectorDotProductTorch.hpp>
 #include <matrixVectorMulTorch.hpp>
-#include <matrixMulTorch.hpp>
+#include <matmulTorch.hpp>
 
 #include <util.cuh>
 

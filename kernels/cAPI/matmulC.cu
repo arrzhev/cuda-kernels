@@ -1,7 +1,7 @@
-#include <matrixMulC.hpp>
+#include <matmulC.hpp>
 
 #include <util.cuh>
-#include <matrixMul.cuh>
+#include <matmul.cuh>
 
 void matrixMul(const float *A_h, const float *B_h, float *C_h, unsigned M, unsigned N, unsigned K)
 {
@@ -21,9 +21,9 @@ void matrixMul(const float *A_h, const float *B_h, float *C_h, unsigned M, unsig
 
     const bool useOpt = M > 128U && N > 128U;
     if(useOpt)
-        launch_matMul_tiled_2D(A_d, B_d, C_d, M, N, K);
+        N % 4U == 0U && K % 4U == 0U ? launch_matmul_TTiles_vec(A_d, B_d, C_d, M, N, K) : launch_matmul_TTiles(A_d, B_d, C_d, M, N, K);
     else
-        launch_matMul_coalescing(A_d, B_d, C_d, M, N, K);
+        launch_matmul_BTiles(A_d, B_d, C_d, M, N, K);
 
     cudaCheckErrors(cudaPeekAtLastError());
     cudaCheckErrors(cudaDeviceSynchronize());
