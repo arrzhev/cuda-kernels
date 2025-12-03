@@ -37,12 +37,42 @@ torch::Tensor matrixMul(torch::Tensor x, torch::Tensor y)
     const unsigned N = y.size(1);
     auto z = torch::empty({M, N}, x.options());
 
-    const bool useOpt = M > 128U && N > 128U;
+    if(M > 512U || N > 512U)
+    {
+        constexpr unsigned BM = 128U;
+        constexpr unsigned BN = 128U;
+        constexpr unsigned BK = 8U;
+        constexpr unsigned TM = 8U;
+        constexpr unsigned TN = 8U;
 
-    if(useOpt)
-        launch_matmul_TTiles_DBuf_vec(x.data_ptr<float>(), y.data_ptr<float>(), z.data_ptr<float>(), M, N, K);
+        launch_matmul_TTiles_DBuf_vec<BM, BN, BK, TM, TN>(x.data_ptr<float>(), y.data_ptr<float>(), z.data_ptr<float>(), M, N, K);
+    }
+    else if(M > 256U || N > 256U)
+    {
+        constexpr unsigned BM = 64U;
+        constexpr unsigned BN = 64U;
+        constexpr unsigned BK = 16U;
+        constexpr unsigned TM = 4U;
+        constexpr unsigned TN = 4U;
+        launch_matmul_TTiles_DBuf_vec<BM, BN, BK, TM, TN>(x.data_ptr<float>(), y.data_ptr<float>(), z.data_ptr<float>(), M, N, K);
+    }
+    else if(M > 128U || N > 128U)
+    {
+        constexpr unsigned BM = 32U;
+        constexpr unsigned BN = 32U;
+        constexpr unsigned BK = 32U;
+        constexpr unsigned TM = 4U;
+        constexpr unsigned TN = 4U;
+
+        launch_matmul_TTiles_DBuf_vec<BM, BN, BK, TM, TN>(x.data_ptr<float>(), y.data_ptr<float>(), z.data_ptr<float>(), M, N, K);
+    }
     else
-        launch_matmul_BTiles(x.data_ptr<float>(), y.data_ptr<float>(), z.data_ptr<float>(), M, N, K);
+    {
+        constexpr unsigned BM = 32U;
+        constexpr unsigned BN = 32U;
+        constexpr unsigned BK = 32U;
+        launch_matmul_BTiles_DBuf<BM,BN, BK>(x.data_ptr<float>(), y.data_ptr<float>(), z.data_ptr<float>(), M, N, K);
+    }
 
     C10_CUDA_KERNEL_LAUNCH_CHECK();
 

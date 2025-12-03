@@ -208,6 +208,50 @@ __global__ void matmul_BTiles_kernel(const float *A, const float *B, float *C, u
 }
 
 template <unsigned BM, unsigned BN, unsigned BK>
+__global__ void matmul_BTiles_SDBuf_kernel(const float *A, const float *B, float *C, unsigned M, unsigned N, unsigned K)
+{
+    constexpr unsigned NUM_THREADS = BM * BN;
+
+    static_assert(BM * BK % NUM_THREADS == 0U);
+    static_assert(BK * BN % NUM_THREADS == 0U);
+
+    const unsigned by = blockIdx.y;
+    const unsigned bx = blockIdx.x;
+    
+    const unsigned ty = threadIdx.x / BN;
+    const unsigned tx = threadIdx.x % BN;
+
+    const unsigned row = by * BM + ty;
+    const unsigned col = bx * BN + tx;
+
+    __shared__ float smemA[2U][BM][BK];
+    __shared__ float smemB[2U][BK][BN];
+
+    float sum = 0.0f;
+
+    unsigned currentIdx = 0U;
+    unsigned nextIdx = 1U;
+
+    loadToShared<BM, BN, BK, NUM_THREADS>(A, B, M, N, K, smemA[currentIdx], smemB[currentIdx], threadIdx.x, 0U);
+    __syncthreads();
+
+    for (unsigned blockOffset = BK; blockOffset < K; blockOffset += BK)
+    {
+        loadToShared<BM, BN, BK, NUM_THREADS>(A, B, M, N, K, smemA[nextIdx], smemB[nextIdx], threadIdx.x, blockOffset);
+
+        processBlockTiles<BM, BN, BK>(ty, tx, smemA[currentIdx], smemB[currentIdx], sum);
+        __syncthreads();
+
+        std::swap(currentIdx, nextIdx);
+    }
+
+    processBlockTiles<BM, BN, BK>(ty, tx, smemA[currentIdx], smemB[currentIdx], sum);
+
+    if (row < M && col < N)
+        C[row * N + col] = sum;
+}
+
+template <unsigned BM, unsigned BN, unsigned BK>
 __global__ void matmul_BTiles_DBuf_kernel(const float *A, const float *B, float *C, unsigned M, unsigned N, unsigned K)
 {
     constexpr unsigned NUM_THREADS = BM * BN;
@@ -306,6 +350,62 @@ __global__ void matmul_TTiles_kernel(const float *A, const float *B, float *C, u
         processThreadTransTiles<BM, BN, BK, TM, TN>(ty, tx, smemA, smemB, regM, regN, sums);
         __syncthreads();
     }
+
+    for (unsigned m = 0U; m < TM; ++m)
+    {
+        for (unsigned n = 0U; n < TN; ++n)
+        {
+            if((row + m) < M && col + n < N)
+                C[(row + m) * N + col + n] = sums[m][n];
+        }
+    }
+}
+
+template <unsigned BM, unsigned BN, unsigned BK, unsigned TM, unsigned TN>
+__global__ void matmul_TTiles_SDBuf_kernel(const float *A, const float *B, float *C, unsigned M, unsigned N, unsigned K)
+{
+    constexpr unsigned NUM_THREADS = BM * BN / (TM * TN);
+
+    static_assert(BM % TM == 0U);
+    static_assert(BN % TN == 0U);
+    // static_assert(NUM_THREADS % BN == 0U);
+    // static_assert(NUM_THREADS % BK == 0U);
+    static_assert(BM * BK % NUM_THREADS == 0U);
+    static_assert(BK * BN % NUM_THREADS == 0U);
+
+    const unsigned ty = (threadIdx.x / (BN / TN)) * TM;
+    const unsigned tx = (threadIdx.x % (BN / TN)) * TN;
+
+    const unsigned by = blockIdx.y;
+    const unsigned bx = blockIdx.x;
+
+    const unsigned row = by * BM + ty;
+    const unsigned col = bx * BN + tx;
+
+    __shared__ float smemA[2U][BK][BM];  // transposed
+    __shared__ float smemB[2U][BK][BN];
+
+    float sums[TM][TN] = {0.0f};
+    float regM[TM] = {0.0};
+    float regN[TN] = {0.0};
+
+    unsigned currentIdx = 0U;
+    unsigned nextIdx = 1U;
+
+    loadToSharedTrans<BM, BN, BK, NUM_THREADS>(A, B, M, N, K, smemA[currentIdx], smemB[currentIdx], threadIdx.x, 0U);
+    __syncthreads();
+
+    for (unsigned blockOffset = BK; blockOffset < K; blockOffset += BK)
+    {
+        loadToSharedTrans<BM, BN, BK, NUM_THREADS>(A, B, M, N, K, smemA[nextIdx], smemB[nextIdx], threadIdx.x, blockOffset);
+
+        processThreadTransTiles<BM, BN, BK, TM, TN>(ty, tx, smemA[currentIdx], smemB[currentIdx], regM, regN, sums);
+        __syncthreads();
+
+        std::swap(currentIdx, nextIdx);
+    }
+
+    processThreadTransTiles<BM, BN, BK, TM, TN>(ty, tx, smemA[currentIdx], smemB[currentIdx], regM, regN, sums);
 
     for (unsigned m = 0U; m < TM; ++m)
     {
@@ -436,6 +536,69 @@ __global__ void matmul_TTiles_vec_kernel(const float *A, const float *B, float *
         processThreadTransTilesVect<BM, BN, BK, TM, TN>(ty, tx, smemA, smemB, regM, regN, sums);
         __syncthreads();
     }
+
+    for (unsigned m = 0U; m < TM; ++m)
+    {
+        for (unsigned n = 0U; n < TN; n += VEC_SIZE)
+        {
+            if((row + m) < M && col + n < N)
+                *reinterpret_cast<float4*>(&C[(row + m) * N + col + n]) = *reinterpret_cast<float4*>(&sums[m][n]);
+        }
+    }
+}
+
+template <unsigned BM, unsigned BN, unsigned BK, unsigned TM, unsigned TN>
+__global__ void matmul_TTiles_SDBuf_vec_kernel(const float *A, const float *B, float *C, unsigned M, unsigned N, unsigned K)
+{
+    constexpr unsigned NUM_THREADS = BM * BN / (TM * TN);
+    constexpr unsigned VEC_SIZE = 4U;
+
+    static_assert(BM % TM == 0U);
+    static_assert(BN % TN == 0U);
+    // static_assert(NUM_THREADS % BN == 0U);
+    // static_assert(NUM_THREADS % BK == 0U);
+    static_assert(BM * BK % NUM_THREADS == 0U);
+    static_assert(BK * BN % NUM_THREADS == 0U);
+    static_assert(BK % VEC_SIZE == 0U);
+    static_assert(BN % VEC_SIZE == 0U);
+    static_assert(TM % VEC_SIZE == 0U);
+    static_assert(TN % VEC_SIZE == 0U);
+    static_assert((BM * BK / VEC_SIZE) % NUM_THREADS == 0U);
+    static_assert((BN * BK / VEC_SIZE) % NUM_THREADS == 0U);
+
+    const unsigned ty = (threadIdx.x / (BN / TN)) * TM;
+    const unsigned tx = (threadIdx.x % (BN / TN)) * TN;
+
+    const unsigned by = blockIdx.y;
+    const unsigned bx = blockIdx.x;
+
+    const unsigned row = by * BM + ty;
+    const unsigned col = bx * BN + tx;
+
+    __shared__ float smemA[2U][BK][BM];  // transposed
+    __shared__ float smemB[2U][BK][BN];
+
+    float sums[TM][TN] = {0.0f};
+    float regM[TM] = {0.0};
+    float regN[TN] = {0.0};
+
+    unsigned currentIdx = 0U;
+    unsigned nextIdx = 1U;
+
+    loadToSharedTransVect<BM, BN, BK, NUM_THREADS>(A, B, M, N, K, smemA[currentIdx], smemB[currentIdx], threadIdx.x, 0U);
+    __syncthreads();
+
+    for (unsigned blockOffset = BK; blockOffset < K; blockOffset += BK)
+    {
+        loadToSharedTransVect<BM, BN, BK, NUM_THREADS>(A, B, M, N, K, smemA[nextIdx], smemB[nextIdx], threadIdx.x, blockOffset);
+
+        processThreadTransTilesVect<BM, BN, BK, TM, TN>(ty, tx, smemA[currentIdx], smemB[currentIdx], regM, regN, sums);
+        __syncthreads();
+
+        std::swap(currentIdx, nextIdx);
+    }
+
+    processThreadTransTilesVect<BM, BN, BK, TM, TN>(ty, tx, smemA[currentIdx], smemB[currentIdx], regM, regN, sums);
 
     for (unsigned m = 0U; m < TM; ++m)
     {
