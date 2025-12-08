@@ -14,6 +14,8 @@ torch::Tensor tensorMul(torch::Tensor x, torch::Tensor y)
 {
     CHECK_INPUT(x);
     CHECK_INPUT(y);
+    CHECK_FP32(x);
+    CHECK_FP32(y);
     const auto xDim = x.dim();
     const auto yDim = y.dim();
     TORCH_CHECK(xDim > 0 && yDim > 0, "x and y tensors must have the same size");

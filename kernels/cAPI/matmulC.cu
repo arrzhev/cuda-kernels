@@ -19,11 +19,48 @@ void matrixMul(const float *A_h, const float *B_h, float *C_h, unsigned M, unsig
     cudaCheckErrors(cudaMemcpy(A_d, A_h, byteSizeA, cudaMemcpyHostToDevice));
     cudaCheckErrors(cudaMemcpy(B_d, B_h, byteSizeB, cudaMemcpyHostToDevice));
 
-    const bool useOpt = M > 128U && N > 128U;
-    if(useOpt)
-        N % 4U == 0U && K % 4U == 0U ? launch_matmul_TTiles_vec(A_d, B_d, C_d, M, N, K) : launch_matmul_TTiles(A_d, B_d, C_d, M, N, K);
+    bool AT = false;
+    bool BT = false;
+
+    if(M > 512U || N > 512U)
+    {
+        constexpr unsigned BM = 128U;
+        constexpr unsigned BN = 128U;
+        constexpr unsigned BK = 8U;
+        constexpr unsigned TM = 8U;
+        constexpr unsigned TN = 8U;
+
+        launch_matmul_Tiles_DBuf<BM, BN, BK, TM, TN>(A_d, B_d, C_d, M, N, K, AT, BT);
+    }
+    else if(M > 256U || N > 256U)
+    {
+        constexpr unsigned BM = 64U;
+        constexpr unsigned BN = 64U;
+        constexpr unsigned BK = 16U;
+        constexpr unsigned TM = 4U;
+        constexpr unsigned TN = 4U;
+        launch_matmul_Tiles_DBuf<BM, BN, BK, TM, TN>(A_d, B_d, C_d, M, N, K, AT, BT);
+    }
+    else if(M > 128U || N > 128U)
+    {
+        constexpr unsigned BM = 32U;
+        constexpr unsigned BN = 32U;
+        constexpr unsigned BK = 32U;
+        constexpr unsigned TM = 4U;
+        constexpr unsigned TN = 4U;
+
+        launch_matmul_Tiles_DBuf<BM, BN, BK, TM, TN>(A_d, B_d, C_d, M, N, K, AT, BT);
+    }
     else
-        launch_matmul_BTiles(A_d, B_d, C_d, M, N, K);
+    {
+        constexpr unsigned BM = 32U;
+        constexpr unsigned BN = 32U;
+        constexpr unsigned BK = 32U;
+        constexpr unsigned TM = 1U;
+        constexpr unsigned TN = 1U;
+
+        launch_matmul_Tiles_DBuf<BM, BN, BK, TM, TN, false>(A_d, B_d, C_d, M, N, K, AT, BT);
+    }
 
     cudaCheckErrors(cudaPeekAtLastError());
     cudaCheckErrors(cudaDeviceSynchronize());

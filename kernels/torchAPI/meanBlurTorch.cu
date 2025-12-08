@@ -10,6 +10,7 @@
 torch::Tensor meanBlur(torch::Tensor image, const unsigned kernelSize)
 {
     CHECK_INPUT(image);
+    CHECK_UINT8(image);
     TORCH_CHECK(kernelSize % 2 == 1, "kernelSize must be odd");
     const bool isDim3 = image.dim() == 3;
     const bool isDim2 = image.dim() == 2;

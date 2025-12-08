@@ -11,6 +11,8 @@ torch::Tensor vectorDotProduct(torch::Tensor x, torch::Tensor y)
 {
     CHECK_INPUT(x);
     CHECK_INPUT(y);
+    CHECK_FP32(x);
+    CHECK_FP32(y);
     TORCH_CHECK(x.dim() == 1 && y.dim() == 1, "x and y tensors must have dimensions equal to 1");
     TORCH_CHECK(x.size(0) == y.size(0), "x and y tensors are 1D and must have the same size");
 

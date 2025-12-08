@@ -10,6 +10,7 @@
 torch::Tensor rgb2gray(torch::Tensor rgbImage)
 {
     CHECK_CUDA(rgbImage);
+    CHECK_UINT8(rgbImage);
     TORCH_CHECK(rgbImage.dim() == 3, "input tensor should have 3 dims");
     const bool isInterleaved = rgbImage.size(2) == 3;
     const bool isPlanar = rgbImage.size(0) == 3;

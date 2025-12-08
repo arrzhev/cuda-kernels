@@ -12,6 +12,8 @@ torch::Tensor tensorAdd(torch::Tensor x, torch::Tensor y)
 {
     CHECK_INPUT(x);
     CHECK_INPUT(y);
+    CHECK_FP32(x);
+    CHECK_FP32(y);
     TORCH_CHECK(x.sizes() == y.sizes(), "x and y tensors must have the same size");
 
     const unsigned size = x.numel();
