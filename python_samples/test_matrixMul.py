@@ -22,17 +22,19 @@ LAYOUTS = ['tt', 'tn', 'nt', 'nn']
 FUNCS = [
          'matmul',
          'matmul_naive', 'matmul_coalescing',
-         'matmul_BTiles', 'matmul_BTiles_DBuf',
-         'matmul_TTiles_1D', 'matmul_TTiles_1D_DBuf',
-         'matmul_TTiles_2D', 'matmul_TTiles_2D_DBuf',
-         'matmul_TTiles_2D_vec', 'matmul_TTiles_2D_DBuf_vec',
+         'matmul_naive_K', 'matmul_coalescing_K',
+         'matmul_BTiles', 'matmul_BTiles_K', 'matmul_BTiles_DBuf',
+         'matmul_TTiles_1D', 'matmul_TTiles_1D_K', 'matmul_TTiles_1D_DBuf',
+         'matmul_TTiles_2D', 'matmul_TTiles_2D_K', 'matmul_TTiles_2D_DBuf',
+         'matmul_TTiles_2D_vec', 'matmul_TTiles_2D_vec_K', 'matmul_TTiles_2D_DBuf_vec',
         ]
 
 @pytest.mark.unit
 @pytest.mark.parametrize("layout", LAYOUTS)
 @pytest.mark.parametrize("func", FUNCS)
 @pytest.mark.parametrize("M, N, K", [(1, 1, 1), (1, 1, 1234), (1, 1234, 1), (1234, 1, 1),
-                                     (10, 10, 10), (64, 64, 64), (256,256, 256), (257, 257, 257)
+                                     (10, 10, 10), (64, 64, 64), (256,256, 256), (257, 257, 257),
+                                     (128, 128, 256), (128, 128, 512), (128, 128, 1024), (128, 128, 2048)
                                     ])
 def test_matmul(layout, func, M, N, K):
     x, y = gen_mats(M, N, K, layout, torch.float32)
@@ -48,7 +50,8 @@ def test_perf_matmul(layout):
     results = []
 
     for M, N, K in [(1, 1, 1), (1, 1, 1234), (1, 1234, 1), (1234, 1, 1),
-                    (10, 10, 10), (64, 64, 64), (256,256, 256), (512, 512, 512), (513, 513, 513)]:
+                    (10, 10, 10), (64, 64, 64), (256,256, 256), (512, 512, 512), (513, 513, 513),
+                    (128, 128, 256), (128, 128, 512), (128, 128, 1024), (128, 128, 2048)]:
         label = 'Matrix Mul ' + layout
         sub_label = f'Matrix1: {M}x{K}; Matrix2: {K}x{N}'
         x, y = gen_mats(M, N, K, layout, torch.float32)

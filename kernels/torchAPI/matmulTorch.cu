@@ -7,7 +7,7 @@
 
 #include "common.cuh"
 
-torch::Tensor matmul_(torch::Tensor A, torch::Tensor B, auto launchMatmulKernel)
+torch::Tensor matmul_(torch::Tensor A, torch::Tensor B, auto launchMatmulKernel, bool zeros = false)
 {
     CHECK_CUDA(A);
     CHECK_CUDA(B);
@@ -19,7 +19,10 @@ torch::Tensor matmul_(torch::Tensor A, torch::Tensor B, auto launchMatmulKernel)
     const unsigned M = A.size(0);
     const unsigned K = A.size(1);
     const unsigned N = B.size(1);
+
     auto C = torch::empty({M, N}, A.options());
+    if(zeros)
+        C.zero_();
 
     bool AT = A.stride(0) == 1 ? true : false;
     bool BT = B.stride(0) == 1 ? true : false;
@@ -55,7 +58,7 @@ torch::Tensor matrixMul(torch::Tensor A, torch::Tensor B)
         constexpr unsigned TM = 8U;
         constexpr unsigned TN = 8U;
 
-        launch_matmul_Tiles_DBuf<BM, BN, BK, TM, TN>(A.data_ptr<float>(), B.data_ptr<float>(), C.data_ptr<float>(), M, N, K, AT, BT);
+        launch_matmul_tiles<BM, BN, BK, TM, TN>(A.data_ptr<float>(), B.data_ptr<float>(), C.data_ptr<float>(), M, N, K, AT, BT);
     }
     else if(M > 256U || N > 256U)
     {
@@ -64,7 +67,8 @@ torch::Tensor matrixMul(torch::Tensor A, torch::Tensor B)
         constexpr unsigned BK = 16U;
         constexpr unsigned TM = 4U;
         constexpr unsigned TN = 4U;
-        launch_matmul_Tiles_DBuf<BM, BN, BK, TM, TN>(A.data_ptr<float>(), B.data_ptr<float>(), C.data_ptr<float>(), M, N, K, AT, BT);
+
+        launch_matmul_tiles<BM, BN, BK, TM, TN>(A.data_ptr<float>(), B.data_ptr<float>(), C.data_ptr<float>(), M, N, K, AT, BT);
     }
     else if(M > 128U || N > 128U)
     {
@@ -74,7 +78,7 @@ torch::Tensor matrixMul(torch::Tensor A, torch::Tensor B)
         constexpr unsigned TM = 4U;
         constexpr unsigned TN = 4U;
 
-        launch_matmul_Tiles_DBuf<BM, BN, BK, TM, TN>(A.data_ptr<float>(), B.data_ptr<float>(), C.data_ptr<float>(), M, N, K, AT, BT);
+        launch_matmul_tiles<BM, BN, BK, TM, TN>(A.data_ptr<float>(), B.data_ptr<float>(), C.data_ptr<float>(), M, N, K, AT, BT);
     }
     else
     {
@@ -84,7 +88,7 @@ torch::Tensor matrixMul(torch::Tensor A, torch::Tensor B)
         constexpr unsigned TM = 1U;
         constexpr unsigned TN = 1U;
 
-        launch_matmul_Tiles_DBuf<BM, BN, BK, TM, TN, false>(A.data_ptr<float>(), B.data_ptr<float>(), C.data_ptr<float>(), M, N, K, AT, BT);
+        launch_matmul_tiles<BM, BN, BK, TM, TN, true, false>(A.data_ptr<float>(), B.data_ptr<float>(), C.data_ptr<float>(), M, N, K, AT, BT);
     }
 
     C10_CUDA_KERNEL_LAUNCH_CHECK();
@@ -95,15 +99,41 @@ torch::Tensor matrixMul(torch::Tensor A, torch::Tensor B)
 torch::Tensor matmulNaive(torch::Tensor x, torch::Tensor y)
 {
     constexpr unsigned blockDim = 16U;
+    constexpr bool coalescing = false;
+    constexpr unsigned numSplitK = 1U;
+    constexpr bool zeroInit = numSplitK > 1U;
 
-    return matmul_(x, y, launch_matmul_naive<blockDim, blockDim>);
+    return matmul_(x, y, launch_matmul_naive<blockDim, blockDim, coalescing, numSplitK>, zeroInit);
+}
+
+torch::Tensor matmulNaiveK(torch::Tensor x, torch::Tensor y)
+{
+    constexpr unsigned blockDim = 16U;
+    constexpr unsigned numSplitK = 4U;
+    constexpr bool coalescing = false;
+    constexpr bool zeroInit = numSplitK > 1U;
+
+    return matmul_(x, y, launch_matmul_naive<blockDim, blockDim, coalescing, numSplitK>, zeroInit);
 }
 
 torch::Tensor matmulCoalescing(torch::Tensor x, torch::Tensor y)
 {
     constexpr unsigned blockDim = 16U;
+    constexpr unsigned numSplitK = 1U;
+    constexpr bool coalescing = true;
+    constexpr bool zeroInit = numSplitK > 1U;
 
-    return matmul_(x, y, launch_matmul_coalescing<blockDim, blockDim>);
+    return matmul_(x, y, launch_matmul_naive<blockDim, blockDim, coalescing, numSplitK>, zeroInit);
+}
+
+torch::Tensor matmulCoalescingK(torch::Tensor x, torch::Tensor y)
+{
+    constexpr unsigned blockDim = 16U;
+    constexpr unsigned numSplitK = 4U;
+    constexpr bool coalescing = true;
+    constexpr bool zeroInit = numSplitK > 1U;
+
+    return matmul_(x, y, launch_matmul_naive<blockDim, blockDim, coalescing, numSplitK>, zeroInit);
 }
 
 torch::Tensor matmulBTiles(torch::Tensor x, torch::Tensor y)
@@ -114,7 +144,28 @@ torch::Tensor matmulBTiles(torch::Tensor x, torch::Tensor y)
     constexpr unsigned TM = 1U;
     constexpr unsigned TN = 1U;
 
-    return matmul_(x, y, launch_matmul_Tiles<BM, BN, BK, TM, TN, false>);
+    constexpr bool DBUF = false;
+    constexpr bool VEC = false;
+    constexpr unsigned numSplitK = 1U;
+    constexpr bool zeroInit = numSplitK > 1U;
+
+    return matmul_(x, y, launch_matmul_tiles<BM, BN, BK, TM, TN, DBUF, VEC, numSplitK>, zeroInit);
+}
+
+torch::Tensor matmulBTilesK(torch::Tensor x, torch::Tensor y)
+{
+    constexpr unsigned BM = 16U;
+    constexpr unsigned BN = 16U;
+    constexpr unsigned BK = 16U;
+    constexpr unsigned TM = 1U;
+    constexpr unsigned TN = 1U;
+
+    constexpr bool DBUF = false;
+    constexpr bool VEC = false;
+    constexpr unsigned numSplitK = 4U;
+    constexpr bool zeroInit = numSplitK > 1U;
+
+    return matmul_(x, y, launch_matmul_tiles<BM, BN, BK, TM, TN, DBUF, VEC, numSplitK>, zeroInit);
 }
 
 torch::Tensor matmulBTilesDBuf(torch::Tensor x, torch::Tensor y)
@@ -125,7 +176,12 @@ torch::Tensor matmulBTilesDBuf(torch::Tensor x, torch::Tensor y)
     constexpr unsigned TM = 1U;
     constexpr unsigned TN = 1U;
 
-    return matmul_(x, y, launch_matmul_Tiles_DBuf<BM, BN, BK, TM, TN, false>);
+    constexpr bool DBUF = true;
+    constexpr bool VEC = false;
+    constexpr unsigned numSplitK = 1U;
+    constexpr bool zeroInit = numSplitK > 1U;
+
+    return matmul_(x, y, launch_matmul_tiles<BM, BN, BK, TM, TN, DBUF, VEC, numSplitK>, zeroInit);
 }
 
 torch::Tensor matmulTTiles1D(torch::Tensor x, torch::Tensor y)
@@ -136,7 +192,28 @@ torch::Tensor matmulTTiles1D(torch::Tensor x, torch::Tensor y)
     constexpr unsigned TM = 16U;
     constexpr unsigned TN = 1U;
 
-    return matmul_(x, y, launch_matmul_Tiles<BM, BN, BK, TM, TN, false>);
+    constexpr bool DBUF = false;
+    constexpr bool VEC = false;
+    constexpr unsigned numSplitK = 1U;
+    constexpr bool zeroInit = numSplitK > 1U;
+
+    return matmul_(x, y, launch_matmul_tiles<BM, BN, BK, TM, TN, DBUF, VEC, numSplitK>, zeroInit);
+}
+
+torch::Tensor matmulTTiles1DK(torch::Tensor x, torch::Tensor y)
+{
+    constexpr unsigned BM = 64U;
+    constexpr unsigned BN = 64U;
+    constexpr unsigned BK = 16U;
+    constexpr unsigned TM = 16U;
+    constexpr unsigned TN = 1U;
+
+    constexpr bool DBUF = false;
+    constexpr bool VEC = false;
+    constexpr unsigned numSplitK = 4U;
+    constexpr bool zeroInit = numSplitK > 1U;
+
+    return matmul_(x, y, launch_matmul_tiles<BM, BN, BK, TM, TN, DBUF, VEC, numSplitK>, zeroInit);
 }
 
 torch::Tensor matmulTTiles1DDBuf(torch::Tensor x, torch::Tensor y)
@@ -147,7 +224,12 @@ torch::Tensor matmulTTiles1DDBuf(torch::Tensor x, torch::Tensor y)
     constexpr unsigned TM = 16U;
     constexpr unsigned TN = 1U;
 
-    return matmul_(x, y, launch_matmul_Tiles_DBuf<BM, BN, BK, TM, TN, false>);
+    constexpr bool DBUF = true;
+    constexpr bool VEC = false;
+    constexpr unsigned numSplitK = 1U;
+    constexpr bool zeroInit = numSplitK > 1U;
+
+    return matmul_(x, y, launch_matmul_tiles<BM, BN, BK, TM, TN, DBUF, VEC, numSplitK>, zeroInit);
 }
 
 torch::Tensor matmulTTiles2D(torch::Tensor x, torch::Tensor y)
@@ -158,7 +240,28 @@ torch::Tensor matmulTTiles2D(torch::Tensor x, torch::Tensor y)
     constexpr unsigned TM = 8U;
     constexpr unsigned TN = 8U;
 
-    return matmul_(x, y, launch_matmul_Tiles<BM, BN, BK, TM, TN, false>);
+    constexpr bool DBUF = false;
+    constexpr bool VEC = false;
+    constexpr unsigned numSplitK = 1U;
+    constexpr bool zeroInit = numSplitK > 1U;
+
+    return matmul_(x, y, launch_matmul_tiles<BM, BN, BK, TM, TN, DBUF, VEC, numSplitK>, zeroInit);
+}
+
+torch::Tensor matmulTTiles2DK(torch::Tensor x, torch::Tensor y)
+{
+    constexpr unsigned BM = 128U;
+    constexpr unsigned BN = 128U;
+    constexpr unsigned BK = 8U;
+    constexpr unsigned TM = 8U;
+    constexpr unsigned TN = 8U;
+
+    constexpr bool DBUF = false;
+    constexpr bool VEC = false;
+    constexpr unsigned numSplitK = 4U;
+    constexpr bool zeroInit = numSplitK > 1U;
+
+    return matmul_(x, y, launch_matmul_tiles<BM, BN, BK, TM, TN, DBUF, VEC, numSplitK>, zeroInit);
 }
 
 torch::Tensor matmulTTiles2DDBuf(torch::Tensor x, torch::Tensor y)
@@ -169,7 +272,12 @@ torch::Tensor matmulTTiles2DDBuf(torch::Tensor x, torch::Tensor y)
     constexpr unsigned TM = 8U;
     constexpr unsigned TN = 8U;
 
-    return matmul_(x, y, launch_matmul_Tiles_DBuf<BM, BN, BK, TM, TN, false>);
+    constexpr bool DBUF = false;
+    constexpr bool VEC = false;
+    constexpr unsigned numSplitK = 1U;
+    constexpr bool zeroInit = numSplitK > 1U;
+
+    return matmul_(x, y, launch_matmul_tiles<BM, BN, BK, TM, TN, DBUF, VEC, numSplitK>, zeroInit);
 }
 
 torch::Tensor matmulTTiles2DVec(torch::Tensor x, torch::Tensor y)
@@ -180,7 +288,28 @@ torch::Tensor matmulTTiles2DVec(torch::Tensor x, torch::Tensor y)
     constexpr unsigned TM = 8U;
     constexpr unsigned TN = 8U;
 
-    return matmul_(x, y, launch_matmul_Tiles<BM, BN, BK, TM, TN>);
+    constexpr bool DBUF = false;
+    constexpr bool VEC = true;
+    constexpr unsigned numSplitK = 1U;
+    constexpr bool zeroInit = numSplitK > 1U;
+
+    return matmul_(x, y, launch_matmul_tiles<BM, BN, BK, TM, TN, DBUF, VEC, numSplitK>, zeroInit);
+}
+
+torch::Tensor matmulTTiles2DVecK(torch::Tensor x, torch::Tensor y)
+{
+    constexpr unsigned BM = 128U;
+    constexpr unsigned BN = 128U;
+    constexpr unsigned BK = 8U;
+    constexpr unsigned TM = 8U;
+    constexpr unsigned TN = 8U;
+
+    constexpr bool DBUF = false;
+    constexpr bool VEC = true;
+    constexpr unsigned numSplitK = 4U;
+    constexpr bool zeroInit = numSplitK > 1U;
+
+    return matmul_(x, y, launch_matmul_tiles<BM, BN, BK, TM, TN, DBUF, VEC, numSplitK>, zeroInit);
 }
 
 torch::Tensor matmulTTiles2DDBufVec(torch::Tensor x, torch::Tensor y)
@@ -191,5 +320,10 @@ torch::Tensor matmulTTiles2DDBufVec(torch::Tensor x, torch::Tensor y)
     constexpr unsigned TM = 8U;
     constexpr unsigned TN = 8U;
 
-    return matmul_(x, y, launch_matmul_Tiles_DBuf<BM, BN, BK, TM, TN>);
+    constexpr bool DBUF = true;
+    constexpr bool VEC = true;
+    constexpr unsigned numSplitK = 1U;
+    constexpr bool zeroInit = numSplitK > 1U;
+
+    return matmul_(x, y, launch_matmul_tiles<BM, BN, BK, TM, TN, DBUF, VEC, numSplitK>, zeroInit);
 }
