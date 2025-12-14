@@ -44,6 +44,7 @@ PYBIND11_MODULE(torch_extension, m)
     m.def("matmul_TTiles_2D_vec_K", &matmulTTiles2DVecK, "Cuda matmul function with Vectorized Thread tiles 2D and split K memory optimization");
     m.def("matmul_TTiles_2D_DBuf_vec", &matmulTTiles2DDBufVec, "Cuda matmul function with Vectorized Thread tiles 2D and Double buffer memory optimization");
     m.def("matmul_TTiles_2D_DBuf_vec_K", &matmulTTiles2DDBufVecK, "Cuda matmul function with Vectorized Thread tiles 2D, Double buffer and split K memory optimization");
+    m.def("matmul_BTiles_vec_wmma", &matmulBTilesVecWMMA, "Cuda matmul function with Vectorized Block tiles and tensor cores optimization");
 
     m.def("tensor_mul", &tensorMul, "Cuda tensor multiplication function");
 }

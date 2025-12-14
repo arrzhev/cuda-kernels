@@ -585,3 +585,38 @@ torch::Tensor matmulTTiles2DDBufVecK(torch::Tensor A, torch::Tensor B)
 
     return launchMatmulTiles<DBUF, VEC, numSplitK, BM, BN, BK, TM, TN>(A, B);
 }
+
+torch::Tensor matmulBTilesVecWMMA(torch::Tensor A, torch::Tensor B)
+{
+    CHECK_MATMUL(A, B);
+    CHECK_FP16(A);
+    CHECK_FP16(B);
+
+    constexpr unsigned BM = 64U;
+    constexpr unsigned BN = 64U;
+    constexpr unsigned BK = 64U;
+    constexpr unsigned WM = 16U;
+    constexpr unsigned WN = 16U;
+    constexpr unsigned WK = 16U;
+
+    constexpr bool VEC = true;
+
+    const unsigned M = A.size(0);
+    const unsigned K = A.size(1);
+    const unsigned N = B.size(1);
+
+    auto C = torch::empty({M, N}, A.options());
+
+    bool AT = A.stride(0) == 1 ? true : false;
+    bool BT = B.stride(0) == 1 ? true : false;
+
+    launch_matmul_tiles_wmma<BM, BN, BK, WM, WN, WK, VEC>(
+        reinterpret_cast<__half*>(A.data_ptr<torch::Half>()),
+        reinterpret_cast<__half*>(B.data_ptr<torch::Half>()),
+        reinterpret_cast<__half*>(C.data_ptr<torch::Half>()),
+        M, N, K, AT, BT);
+
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+
+    return C;
+}

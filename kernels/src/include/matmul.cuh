@@ -454,6 +454,66 @@ __global__ void matmul_tiles_DBuf_kernel(const T *A, const T *B, T *C, unsigned 
     storeResult<SK, TM, TN, VEC>(C, row, col, M, N, sums);
 }
 
+template <unsigned BM, unsigned BN, unsigned BK, unsigned WM, unsigned WN, unsigned WK, bool AT, bool BT, bool VEC>
+__global__ void matmul_tiles_wmma_kernel(const __half *A, const __half *B, __half *C, unsigned M, unsigned N, unsigned K)
+{
+    using SumType = __half;
+    using VecType = typename std::conditional_t<VEC, int4, __half>;
+
+    constexpr unsigned VEC_SIZE = sizeof(VecType) / sizeof(__half);
+    constexpr bool STORE_AT = true;
+    constexpr unsigned NUM_THREADS = BM * BN  * 32U / (WM * WN);
+
+    static_assert(BM % WM == 0U);
+    static_assert(BN % WN == 0U);
+    static_assert(BK % WK == 0U);
+    static_assert(BM * BK % NUM_THREADS == 0U);
+    static_assert(BK * BN % NUM_THREADS == 0U);
+    static_assert(BM % VEC_SIZE == 0U);
+    static_assert(BK % VEC_SIZE == 0U);
+    static_assert(BN % VEC_SIZE == 0U);
+    static_assert((BM * BK / VEC_SIZE) % NUM_THREADS == 0U);
+    static_assert((BN * BK / VEC_SIZE) % NUM_THREADS == 0U);
+
+    const unsigned wIdx = threadIdx.x / 32;
+    const unsigned ty = wIdx / (BN / WN) * WM;
+    const unsigned tx = wIdx % (BN / WN) * WN;
+
+    const unsigned by = blockIdx.y;
+    const unsigned bx = blockIdx.x;
+
+    const unsigned row = by * BM + ty;
+    const unsigned col = bx * BN + tx;
+
+    __shared__ __half smemA[BK * BM];  // STORE_AT - transposed or not; size always BK * BM
+    __shared__ __half smemB[BK * BN];
+
+    nvcuda::wmma::fragment<nvcuda::wmma::accumulator, WM, WN, WK, SumType> sums;
+    nvcuda::wmma::fragment<nvcuda::wmma::matrix_a, WM, WN, WK, __half, nvcuda::wmma::col_major> regM;
+    nvcuda::wmma::fragment<nvcuda::wmma::matrix_b, WM, WN, WK, __half, nvcuda::wmma::row_major> regN;
+
+    nvcuda::wmma::fill_fragment(sums, static_cast<__half>(0));
+
+    for (unsigned blockOffset = 0U; blockOffset < K; blockOffset += BK)
+    {
+        loadToShared<BM, BN, BK, NUM_THREADS, AT, BT, STORE_AT, VEC>(A, B, M, N, K, smemA, smemB, threadIdx.x, blockOffset);
+        __syncthreads();
+
+        for(unsigned k = 0U; k < BK; k += WK)
+        {
+            nvcuda::wmma::load_matrix_sync(regM, &smemA[k * BM + ty], BM);
+
+            nvcuda::wmma::load_matrix_sync(regN, &smemB[k * BN + tx], BN);
+
+            nvcuda::wmma::mma_sync(sums, regM, regN, sums);
+        }
+        __syncthreads();
+    }
+
+    if(row < M && col < N)
+        nvcuda::wmma::store_matrix_sync(&C[row * N + col], sums, N, nvcuda::wmma::mem_row_major);
+}
+
 ///// Launch functions /////
 
 template <unsigned blockDimX = 16U, unsigned blockDimY = 16U, bool COAL = true, unsigned SK = 1U, MatType T>
@@ -520,6 +580,57 @@ void launch_matmul_tiles(const T *A, const T *B, T *C, unsigned M, unsigned N, u
             launchKernel.template operator()<false, true, false>();
         else
             launchKernel.template operator()<false, false, false>();
+    }
+}
+
+template <unsigned BM = 64U, unsigned BN = 64U, unsigned BK = 16U, unsigned WM = 16U, unsigned WN = 16U, unsigned WK = 16U,
+          bool VEC = true>
+void launch_matmul_tiles_wmma(const __half *A, const __half *B, __half *C, unsigned M, unsigned N, unsigned K, bool AT, bool BT)
+{
+    if(M % WM == 0U && N % WN == 0U)
+    {
+      using VecType = typename std::conditional_t<VEC, int4, __half>;
+
+      constexpr unsigned VEC_SIZE = sizeof(VecType) / sizeof(__half);
+
+      const dim3 blockDim(BM * BN * 32U / (WN * WM));
+      const dim3 gridDim(CEIL_DIV(N, BN), CEIL_DIV(M, BM));
+
+      auto launchKernel = [&] <bool T1, bool T2, bool V> () {
+          matmul_tiles_wmma_kernel<BM, BN, BK, WM, WN, WK, T1, T2, V><<<gridDim, blockDim>>>(A, B, C, M, N, K);
+      };
+
+      const unsigned lda = AT ? M : K;
+      const unsigned ldb = BT ? K : N;
+      const unsigned ldc = N;
+      const bool possibleVecAccess = (lda % VEC_SIZE == 0U) && (ldb % VEC_SIZE == 0U) && (ldc % VEC_SIZE == 0U);
+
+      if(possibleVecAccess)
+      {
+          if(AT && BT)
+              launchKernel.template operator()<true, true, VEC>();
+          else if(AT)
+              launchKernel.template operator()<true, false, VEC>();
+          else if(BT)
+              launchKernel.template operator()<false, true, VEC>();
+          else
+              launchKernel.template operator()<false, false, VEC>();
+      }
+      else
+      {
+          if(AT && BT)
+              launchKernel.template operator()<true, true, false>();
+          else if(AT)
+              launchKernel.template operator()<true, false, false>();
+          else if(BT)
+              launchKernel.template operator()<false, true, false>();
+          else
+              launchKernel.template operator()<false, false, false>();
+      }
+    }
+    else
+    {
+      launch_matmul_tiles<128U, 128U, 16U, 8U, 8U, VEC, false, 1U>(A, B, C, M, N, K, AT, BT);
     }
 }
 

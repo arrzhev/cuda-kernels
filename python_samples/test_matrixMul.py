@@ -19,7 +19,7 @@ def gen_mats(M, N, K, layout='tt', dtype=torch.float32, device='cuda'):
 
 LAYOUTS = ['tt', 'tn', 'nt', 'nn']
 
-ALL_FUNCS = [
+GEN_FUNCS = [
             'matmul',
             'matmul_naive', 'matmul_coalescing',
             'matmul_naive_K', 'matmul_coalescing_K',
@@ -33,14 +33,22 @@ ALL_FUNCS = [
             'matmul_TTiles_2D_vec_K', 'matmul_TTiles_2D_DBuf_vec_K',
             ]
 
-RT_FUNCS = [
-             'matmul',
-             'matmul_naive', 'matmul_naive_K',
-             'matmul_BTiles', 'matmul_BTiles_K',
-             'matmul_TTiles_1D', 'matmul_TTiles_2D',
-             'matmul_TTiles_2D_vec', 'matmul_TTiles_2D_DBuf_vec',
-             'matmul_TTiles_2D_vec_K', 'matmul_TTiles_2D_DBuf_vec_K',
+REDUCED_FUNCS = [
+                'matmul_BTiles_vec_wmma',
+                ]
+
+RT_GEN_FUNCS = [
+            'matmul',
+            'matmul_naive', 'matmul_naive_K',
+            'matmul_BTiles', 'matmul_BTiles_K',
+            'matmul_TTiles_1D', 'matmul_TTiles_2D',
+            'matmul_TTiles_2D_vec', 'matmul_TTiles_2D_DBuf_vec',
+            'matmul_TTiles_2D_vec_K', 'matmul_TTiles_2D_DBuf_vec_K',
            ]
+
+RT_REDUCED_FUNCS = [
+                    'matmul_BTiles_vec_wmma',
+                   ]
 
 IRREGULAR_SIZES = [(1, 1, 1), (1, 1, 1234), (1, 1234, 1), (1234, 1, 1), (10, 10, 10), (85, 77, 43), (123, 123, 123), (513, 512, 511)]
 SCALE_SIZES = [(64, 64, 64), (256,256, 256), (512, 512, 512)]
@@ -49,24 +57,26 @@ SCALE_K_SIZES = [(128, 128, 256), (128, 128, 512), (128, 128, 1024), (128, 128, 
 @pytest.mark.unit
 @pytest.mark.parametrize("dtype", [torch.float16, torch.float32])
 @pytest.mark.parametrize("layout", LAYOUTS)
-@pytest.mark.parametrize("func", ALL_FUNCS)
+@pytest.mark.parametrize("func", GEN_FUNCS + REDUCED_FUNCS)
 @pytest.mark.parametrize("M, N, K", IRREGULAR_SIZES + SCALE_SIZES + SCALE_K_SIZES)
-def test_matmul(dtype, layout, func, M, N, K):
-    x, y = gen_mats(M, N, K, layout, dtype)
+def test_matmul_gen(dtype, layout, func, M, N, K):
+    execute_test = not (dtype == torch.float32 and func in REDUCED_FUNCS)
+    if execute_test:
+        x, y = gen_mats(M, N, K, layout, dtype)
 
-    z_torch = x @ y
-    z_extension = getattr(torch_extension, func)(x, y)
+        z_torch = x @ y
+        z_extension = getattr(torch_extension, func)(x, y)
 
-    torch.testing.assert_close(z_torch, z_extension, atol=1e-3, rtol=1e-3)
+        torch.testing.assert_close(z_torch, z_extension, atol=1e-3, rtol=1e-3)
 
 @pytest.mark.performance
 @pytest.mark.parametrize("dtype", [torch.float16, torch.float32])
 @pytest.mark.parametrize("layout", LAYOUTS)
-def test_perf_matmul(dtype, layout):
+def test_perf_matmul_gen(dtype, layout):
     results = []
 
     for M, N, K in IRREGULAR_SIZES + SCALE_SIZES + SCALE_K_SIZES:
-        label = 'Matrix Mul ' + layout
+        label = f'Matrix Mul {str(dtype)} {layout}'
         sub_label = f'Matrix1: {M}x{K}; Matrix2: {K}x{N}'
         x, y = gen_mats(M, N, K, layout, dtype)
 
@@ -79,7 +89,7 @@ def test_perf_matmul(dtype, layout):
             description='torch',
         ).blocked_autorange())
 
-        for func in RT_FUNCS:
+        for func in RT_GEN_FUNCS:
             results.append(benchmark.Timer(
             stmt='torch_extension.' + func + '(x, y)',
             setup='',
@@ -88,6 +98,17 @@ def test_perf_matmul(dtype, layout):
             sub_label=sub_label,
             description = func,
             ).blocked_autorange())
+        
+        if dtype == torch.float16:
+            for func in RT_REDUCED_FUNCS:
+                results.append(benchmark.Timer(
+                stmt='torch_extension.' + func + '(x, y)',
+                setup='',
+                globals={'torch_extension': torch_extension, 'x': x, 'y': y},
+                label=label,
+                sub_label=sub_label,
+                description = func,
+                ).blocked_autorange())
 
     compare = benchmark.Compare(results)
     print('\n')
@@ -102,8 +123,8 @@ if __name__ == '__main__':
     y = torch.randn(K, N, dtype=dtype, device="cuda")
 
     z_torch = x @ y
-    z_extension = torch_extension.matmul_naive(x, y)
-    torch.testing.assert_close(z_torch, z_extension, atol=1e-6, rtol=1e-6)
+    z_extension = torch_extension.matmul(x, y)
+
     print('Matmul test')
     print(f'Torch result - {z_torch}')
     print(f'Extension result - {z_extension}')

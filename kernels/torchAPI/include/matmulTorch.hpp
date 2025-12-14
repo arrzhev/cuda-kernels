@@ -24,5 +24,6 @@ torch::Tensor matmulTTiles2DVec(torch::Tensor A, torch::Tensor B);
 torch::Tensor matmulTTiles2DVecK(torch::Tensor A, torch::Tensor B);
 torch::Tensor matmulTTiles2DDBufVec(torch::Tensor A, torch::Tensor B);
 torch::Tensor matmulTTiles2DDBufVecK(torch::Tensor A, torch::Tensor B);
+torch::Tensor matmulBTilesVecWMMA(torch::Tensor A, torch::Tensor B);
 
 #endif // MATMUL_TORCH
