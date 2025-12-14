@@ -59,8 +59,9 @@ void matrixMul(const float *A_h, const float *B_h, float *C_h, unsigned M, unsig
         constexpr unsigned BK = 32U;
         constexpr unsigned TM = 1U;
         constexpr unsigned TN = 1U;
+        constexpr bool VEC = false;
 
-        launch_matmul_tiles<BM, BN, BK, TM, TN, true, false>(A_d, B_d, C_d, M, N, K, AT, BT);
+        launch_matmul_tiles<BM, BN, BK, TM, TN, VEC>(A_d, B_d, C_d, M, N, K, AT, BT);
     }
 
     cudaCheckErrors(cudaPeekAtLastError());

@@ -3,6 +3,7 @@
 
 #include <concepts>
 #include <cstdio>
+#include <cuda_fp16.h>
 
 #define CEIL_DIV(x, y) (((x) + (y) - 1) / (y))
 
@@ -70,6 +71,11 @@ inline __host__ __device__ float4 operator+(float4 a, float4 b)
 inline __host__ __device__ float4 operator-(float4 a, float4 b)
 {
     return {a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w};
+}
+
+inline __host__ __device__ float dot(__half a, __half b)
+{
+    return __half2float(a) * __half2float(b);
 }
 
 inline __host__ __device__ float dot(float a, float b)

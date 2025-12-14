@@ -1,6 +1,9 @@
 #ifndef COMMON_TORCH
 #define COMMON_TORCH
 
+#define CHECK_FP(x) TORCH_CHECK((x).scalar_type() == torch::kFloat || (x).scalar_type() == torch::kHalf, #x " must be a FP32 or FP16 tensor")
+#define CHECK_FPS(x, y) CHECK_FP(x); CHECK_FP(y); TORCH_CHECK((x).scalar_type() == (y).scalar_type(), "Tensors must be the same type tensor")
+
 #define CHECK_FP16(x) TORCH_CHECK((x).scalar_type() == torch::kHalf, #x " must be a FP16 tensor")
 #define CHECK_FP32(x) TORCH_CHECK((x).scalar_type() == torch::kFloat, #x " must be a FP32 tensor")
 
