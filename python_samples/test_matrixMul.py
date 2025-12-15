@@ -55,28 +55,30 @@ SCALE_SIZES = [(64, 64, 64), (256,256, 256), (512, 512, 512)]
 SCALE_K_SIZES = [(128, 128, 256), (128, 128, 512), (128, 128, 1024), (128, 128, 2048)]
 
 @pytest.mark.unit
-@pytest.mark.parametrize("dtype", [torch.float16, torch.float32])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
 @pytest.mark.parametrize("layout", LAYOUTS)
+@pytest.mark.parametrize("transC", [False, True])
 @pytest.mark.parametrize("func", GEN_FUNCS + REDUCED_FUNCS)
 @pytest.mark.parametrize("M, N, K", IRREGULAR_SIZES + SCALE_SIZES + SCALE_K_SIZES)
-def test_matmul_gen(dtype, layout, func, M, N, K):
+def test_matmul_gen(dtype, layout, transC, func, M, N, K):
     execute_test = not (dtype == torch.float32 and func in REDUCED_FUNCS)
     if execute_test:
         x, y = gen_mats(M, N, K, layout, dtype)
 
         z_torch = x @ y
-        z_extension = getattr(torch_extension, func)(x, y)
+        z_extension = getattr(torch_extension, func)(x, y, transC)
 
         torch.testing.assert_close(z_torch, z_extension, atol=1e-3, rtol=1e-3)
 
 @pytest.mark.performance
 @pytest.mark.parametrize("dtype", [torch.float16, torch.float32])
 @pytest.mark.parametrize("layout", LAYOUTS)
-def test_perf_matmul_gen(dtype, layout):
+@pytest.mark.parametrize("transC", [False, True])
+def test_perf_matmul_gen(dtype, layout, transC):
     results = []
 
     for M, N, K in IRREGULAR_SIZES + SCALE_SIZES + SCALE_K_SIZES:
-        label = f'Matrix Mul {str(dtype)} {layout}'
+        label = f'Matrix Mul {str(dtype)} {layout} {"CT" if transC else ""}'
         sub_label = f'Matrix1: {M}x{K}; Matrix2: {K}x{N}'
         x, y = gen_mats(M, N, K, layout, dtype)
 
@@ -91,9 +93,9 @@ def test_perf_matmul_gen(dtype, layout):
 
         for func in RT_GEN_FUNCS:
             results.append(benchmark.Timer(
-            stmt='torch_extension.' + func + '(x, y)',
+            stmt='torch_extension.' + func + '(x, y, transC)',
             setup='',
-            globals={'torch_extension': torch_extension, 'x': x, 'y': y},
+            globals={'torch_extension': torch_extension, 'x': x, 'y': y, 'transC': transC},
             label=label,
             sub_label=sub_label,
             description = func,
@@ -102,9 +104,9 @@ def test_perf_matmul_gen(dtype, layout):
         if dtype == torch.float16:
             for func in RT_REDUCED_FUNCS:
                 results.append(benchmark.Timer(
-                stmt='torch_extension.' + func + '(x, y)',
+                stmt='torch_extension.' + func + '(x, y, transC)',
                 setup='',
-                globals={'torch_extension': torch_extension, 'x': x, 'y': y},
+                globals={'torch_extension': torch_extension, 'x': x, 'y': y, 'transC': transC},
                 label=label,
                 sub_label=sub_label,
                 description = func,

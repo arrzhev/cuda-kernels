@@ -8,6 +8,8 @@
 #include <matmulTorch.hpp>
 #include <tensorMulTorch.hpp>
 
+using namespace pybind11::literals;
+
 PYBIND11_MODULE(torch_extension, m) 
 {
     m.def("tensor_add", &tensorAdd, "Cuda tensor addition function");
@@ -23,28 +25,50 @@ PYBIND11_MODULE(torch_extension, m)
     m.def("matrix_vector_mul_shared", &matrixVectorMulShared, "Cuda matrix vector multiplication function with shared memory optimization");
     m.def("matrix_vector_mul_warp", &matrixVectorMulWarp, "Cuda matrix vector multiplication function with warp optimization");
 
-    m.def("matmul", &matrixMul, "Cuda matmul Optimized function");
-    m.def("matmul_naive", &matmulNaive, "Cuda matmul Naive function");
-    m.def("matmul_naive_K", &matmulNaiveK, "Cuda matmul Naive function with K split");
-    m.def("matmul_coalescing", &matmulCoalescing, "Cuda matmul function with Coalescing memory optimization");
-    m.def("matmul_coalescing_K", &matmulCoalescingK, "Cuda matmul function with Coalescing memory and split K optimizations");
-    m.def("matmul_BTiles", &matmulBTiles, "Cuda matmul function with Block tiles memory optimization");
-    m.def("matmul_BTiles_K", &matmulBTilesK, "Cuda matmul function with Block tiles and split K memory optimization");
-    m.def("matmul_BTiles_DBuf", &matmulBTilesDBuf, "Cuda matmul function with Block tiles and Double buffer memory optimizations");
-    m.def("matmul_BTiles_DBuf_K", &matmulBTilesDBufK, "Cuda matmul function with Block tiles, Double buffer and split K memory optimizations");
-    m.def("matmul_TTiles_1D", &matmulTTiles1D, "Cuda matmul function with Thread tiles 1D memory optimization");
-    m.def("matmul_TTiles_1D_K", &matmulTTiles1DK, "Cuda matmul function with Thread tiles 1D and split K memory optimization");
-    m.def("matmul_TTiles_1D_DBuf", &matmulTTiles1DDBuf, "Cuda matmul function with Thread tiles 1D and Double buffer memory optimizations");
-    m.def("matmul_TTiles_1D_DBuf_K", &matmulTTiles1DDBufK, "Cuda matmul function with Thread tiles 1D, Double buffer and split K memory optimizations");
-    m.def("matmul_TTiles_2D", &matmulTTiles2D, "Cuda matmul function with Thread tiles 2D memory optimization");
-    m.def("matmul_TTiles_2D_K", &matmulTTiles2DK, "Cuda matmul function with Thread tiles 2D and split K memory optimization");
-    m.def("matmul_TTiles_2D_DBuf", &matmulTTiles2DDBuf, "Cuda matmul function with Thread tiles 2D and Double buffer memory optimizations");
-    m.def("matmul_TTiles_2D_DBuf_K", &matmulTTiles2DDBufK, "Cuda matmul function with Thread tiles 2D, Double buffer and split K memory optimizations");
-    m.def("matmul_TTiles_2D_vec", &matmulTTiles2DVec, "Cuda matmul function with Vectorized Thread tiles 2D memory optimization");
-    m.def("matmul_TTiles_2D_vec_K", &matmulTTiles2DVecK, "Cuda matmul function with Vectorized Thread tiles 2D and split K memory optimization");
-    m.def("matmul_TTiles_2D_DBuf_vec", &matmulTTiles2DDBufVec, "Cuda matmul function with Vectorized Thread tiles 2D and Double buffer memory optimization");
-    m.def("matmul_TTiles_2D_DBuf_vec_K", &matmulTTiles2DDBufVecK, "Cuda matmul function with Vectorized Thread tiles 2D, Double buffer and split K memory optimization");
-    m.def("matmul_BTiles_vec_wmma", &matmulBTilesVecWMMA, "Cuda matmul function with Vectorized Block tiles and tensor cores optimization");
+    m.def("matmul", &matrixMul, "Cuda matmul Optimized function",
+         "A"_a, "B"_a, "transC"_a = false);
+    m.def("matmul_naive", &matmulNaive, "Cuda matmul Naive function",
+         "A"_a, "B"_a, "transC"_a = false);
+    m.def("matmul_naive_K", &matmulNaiveK, "Cuda matmul Naive function with K split",
+         "A"_a, "B"_a, "transC"_a = false);
+    m.def("matmul_coalescing", &matmulCoalescing, "Cuda matmul function with Coalescing memory optimization",
+         "A"_a, "B"_a, "transC"_a = false);
+    m.def("matmul_coalescing_K", &matmulCoalescingK, "Cuda matmul function with Coalescing memory and split K optimizations",
+         "A"_a, "B"_a, "transC"_a = false);
+    m.def("matmul_BTiles", &matmulBTiles, "Cuda matmul function with Block tiles memory optimization",
+         "A"_a, "B"_a, "transC"_a = false);
+    m.def("matmul_BTiles_K", &matmulBTilesK, "Cuda matmul function with Block tiles and split K memory optimization",
+         "A"_a, "B"_a, "transC"_a = false);
+    m.def("matmul_BTiles_DBuf", &matmulBTilesDBuf, "Cuda matmul function with Block tiles and Double buffer memory optimizations",
+         "A"_a, "B"_a, "transC"_a = false);
+    m.def("matmul_BTiles_DBuf_K", &matmulBTilesDBufK, "Cuda matmul function with Block tiles, Double buffer and split K memory optimizations",
+         "A"_a, "B"_a, "transC"_a = false);
+    m.def("matmul_TTiles_1D", &matmulTTiles1D, "Cuda matmul function with Thread tiles 1D memory optimization",
+         "A"_a, "B"_a, "transC"_a = false);
+    m.def("matmul_TTiles_1D_K", &matmulTTiles1DK, "Cuda matmul function with Thread tiles 1D and split K memory optimization",
+         "A"_a, "B"_a, "transC"_a = false);
+    m.def("matmul_TTiles_1D_DBuf", &matmulTTiles1DDBuf, "Cuda matmul function with Thread tiles 1D and Double buffer memory optimizations",
+         "A"_a, "B"_a, "transC"_a = false);
+    m.def("matmul_TTiles_1D_DBuf_K", &matmulTTiles1DDBufK, "Cuda matmul function with Thread tiles 1D, Double buffer and split K memory optimizations",
+         "A"_a, "B"_a, "transC"_a = false);
+    m.def("matmul_TTiles_2D", &matmulTTiles2D, "Cuda matmul function with Thread tiles 2D memory optimization",
+         "A"_a, "B"_a, "transC"_a = false);
+    m.def("matmul_TTiles_2D_K", &matmulTTiles2DK, "Cuda matmul function with Thread tiles 2D and split K memory optimization",
+         "A"_a, "B"_a, "transC"_a = false);
+    m.def("matmul_TTiles_2D_DBuf", &matmulTTiles2DDBuf, "Cuda matmul function with Thread tiles 2D and Double buffer memory optimizations",
+         "A"_a, "B"_a, "transC"_a = false);
+    m.def("matmul_TTiles_2D_DBuf_K", &matmulTTiles2DDBufK, "Cuda matmul function with Thread tiles 2D, Double buffer and split K memory optimizations",
+         "A"_a, "B"_a, "transC"_a = false);
+    m.def("matmul_TTiles_2D_vec", &matmulTTiles2DVec, "Cuda matmul function with Vectorized Thread tiles 2D memory optimization",
+         "A"_a, "B"_a, "transC"_a = false);
+    m.def("matmul_TTiles_2D_vec_K", &matmulTTiles2DVecK, "Cuda matmul function with Vectorized Thread tiles 2D and split K memory optimization",
+         "A"_a, "B"_a, "transC"_a = false);
+    m.def("matmul_TTiles_2D_DBuf_vec", &matmulTTiles2DDBufVec, "Cuda matmul function with Vectorized Thread tiles 2D and Double buffer memory optimization",
+         "A"_a, "B"_a, "transC"_a = false);
+    m.def("matmul_TTiles_2D_DBuf_vec_K", &matmulTTiles2DDBufVecK, "Cuda matmul function with Vectorized Thread tiles 2D, Double buffer and split K memory optimization",
+         "A"_a, "B"_a, "transC"_a = false);
+    m.def("matmul_BTiles_vec_wmma", &matmulBTilesVecWMMA, "Cuda matmul function with Vectorized Block tiles and tensor cores optimization",
+         "A"_a, "B"_a, "transC"_a = false);
 
     m.def("tensor_mul", &tensorMul, "Cuda tensor multiplication function");
 }

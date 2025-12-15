@@ -21,6 +21,7 @@ void matrixMul(const float *A_h, const float *B_h, float *C_h, unsigned M, unsig
 
     bool AT = false;
     bool BT = false;
+    bool CT = false;
 
     if(M > 512U || N > 512U)
     {
@@ -30,7 +31,7 @@ void matrixMul(const float *A_h, const float *B_h, float *C_h, unsigned M, unsig
         constexpr unsigned TM = 8U;
         constexpr unsigned TN = 8U;
 
-        launch_matmul_tiles<BM, BN, BK, TM, TN>(A_d, B_d, C_d, M, N, K, AT, BT);
+        launch_matmul_tiles<BM, BN, BK, TM, TN>(A_d, B_d, C_d, M, N, K, AT, BT, CT);
     }
     else if(M > 256U || N > 256U)
     {
@@ -40,7 +41,7 @@ void matrixMul(const float *A_h, const float *B_h, float *C_h, unsigned M, unsig
         constexpr unsigned TM = 4U;
         constexpr unsigned TN = 4U;
 
-        launch_matmul_tiles<BM, BN, BK, TM, TN>(A_d, B_d, C_d, M, N, K, AT, BT);
+        launch_matmul_tiles<BM, BN, BK, TM, TN>(A_d, B_d, C_d, M, N, K, AT, BT, CT);
     }
     else if(M > 128U || N > 128U)
     {
@@ -50,7 +51,7 @@ void matrixMul(const float *A_h, const float *B_h, float *C_h, unsigned M, unsig
         constexpr unsigned TM = 4U;
         constexpr unsigned TN = 4U;
 
-        launch_matmul_tiles<BM, BN, BK, TM, TN>(A_d, B_d, C_d, M, N, K, AT, BT);
+        launch_matmul_tiles<BM, BN, BK, TM, TN>(A_d, B_d, C_d, M, N, K, AT, BT, CT);
     }
     else
     {
@@ -61,7 +62,7 @@ void matrixMul(const float *A_h, const float *B_h, float *C_h, unsigned M, unsig
         constexpr unsigned TN = 1U;
         constexpr bool VEC = false;
 
-        launch_matmul_tiles<BM, BN, BK, TM, TN, VEC>(A_d, B_d, C_d, M, N, K, AT, BT);
+        launch_matmul_tiles<BM, BN, BK, TM, TN, VEC>(A_d, B_d, C_d, M, N, K, AT, BT, CT);
     }
 
     cudaCheckErrors(cudaPeekAtLastError());

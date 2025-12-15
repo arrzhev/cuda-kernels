@@ -1,6 +1,7 @@
 #ifndef MATMUL_KERNELS
 #define MATMUL_KERNELS
 
+#include <variant>
 #include <util.cuh>
 #include <cuda_fp16.h>
 #include <mma.h>
@@ -92,8 +93,9 @@ __device__ void loadToShared(const T *A, const T *B, unsigned M, unsigned N, uns
     loadMatToShared.template operator()<BK, BN, LOAD_BT, false>(B, K, N, smemB, blockOffset, bx * BN);
 }
 
-template <unsigned BM, unsigned BN, unsigned BK, unsigned TM, unsigned TN, bool STORE_AT, bool VEC, MatType T, AccumType SumType>
-__device__ void processTiles(unsigned ty, unsigned tx, const T* smemA, const T* smemB, T regM[TM], T regN[TN], SumType sums[TM][TN])
+template <unsigned BM, unsigned BN, unsigned BK, unsigned TM, unsigned TN,
+          bool STORE_AT, bool CT, bool VEC, MatType T, AccumType SumType>
+__device__ void processTiles(unsigned ty, unsigned tx, const T* smemA, const T* smemB, T regM[TM], T regN[TN], SumType* sums)
 {
     using VecType = typename std::conditional_t<VEC, int4, T>;
 
@@ -117,18 +119,31 @@ __device__ void processTiles(unsigned ty, unsigned tx, const T* smemA, const T* 
         for (unsigned n = 0U; n < TN; n += VEC_SIZE)
             *reinterpret_cast<VecType*>(&regN[n]) = *reinterpret_cast<const VecType*>(&smemB[k * BN + tx + n]);
 
-#pragma unroll
-        for (unsigned m = 0U; m < TM; ++m)
+        if constexpr (CT)
         {
 #pragma unroll
             for (unsigned n = 0; n < TN; ++n)
-                sums[m][n] += dot(regM[m], regN[n]);
+            {
+#pragma unroll
+                for (unsigned m = 0U; m < TM; ++m)
+                    sums[n * TM + m] += dot(regM[m], regN[n]);
+            }
+        }
+        else
+        {
+#pragma unroll
+            for (unsigned m = 0U; m < TM; ++m)
+            {
+#pragma unroll
+                for (unsigned n = 0; n < TN; ++n)
+                    sums[m * TN + n] += dot(regM[m], regN[n]);
+            }
         }
     }
 }
 
 template <unsigned SK, unsigned TM, unsigned TN, bool VEC, MatType T, AccumType SumType>
-__device__ void storeResult(T *mat, unsigned row, unsigned col, unsigned rows, unsigned cols, const SumType sums[TM][TN])
+__device__ void storeResult(T *mat, unsigned row, unsigned col, unsigned rows, unsigned cols, const SumType* sums)
 {
     constexpr bool isMatSumSameType = std::is_same_v<T, SumType>;
     using VecType = typename std::conditional_t<VEC && SK == 1U && isMatSumSameType, int4, T>;
@@ -138,26 +153,58 @@ __device__ void storeResult(T *mat, unsigned row, unsigned col, unsigned rows, u
 #pragma unroll
     for (unsigned m = 0U; m < TM; ++m)
     {
-    #pragma unroll
+#pragma unroll
         for (unsigned n = 0U; n < TN; n += VEC_SIZE)
         {
-            if((row + m) < rows && col + n < cols)
+            if((row + m) < rows && (col + n) < cols)
             {
+                const unsigned idxC = (row + m) * cols + col + n;
                 if constexpr (SK == 1U)
                 {
                     if constexpr (isMatSumSameType)
-                        *reinterpret_cast<VecType*>(&mat[(row + m) * cols + col + n]) = *reinterpret_cast<const VecType*>(&sums[m][n]);
+                        *reinterpret_cast<VecType*>(&mat[idxC]) = *reinterpret_cast<const VecType*>(&sums[m * TN + n]);
                     else
-                        mat[(row + m) * cols + col + n] = static_cast<T>(sums[m][n]);
+                        mat[idxC] = static_cast<T>(sums[m * TN + n]);
                 }
                 else
-                    atomicAdd(&mat[(row + m) * cols + col + n], static_cast<T>(sums[m][n]));
+                    atomicAdd(&mat[idxC], static_cast<T>(sums[m * TN + n]));
             }
         }
     }
 }
 
-template <unsigned SK, bool COAL, bool AT, bool BT, MatType T>
+template <unsigned SK, unsigned TM, unsigned TN, bool VEC, MatType T, AccumType SumType>
+__device__ void storeResultCT(T *mat, unsigned row, unsigned col, unsigned rows, unsigned cols, const SumType* sums)
+{
+    constexpr bool isMatSumSameType = std::is_same_v<T, SumType>;
+    using VecType = typename std::conditional_t<VEC && SK == 1U && isMatSumSameType, int4, T>;
+
+    constexpr unsigned VEC_SIZE = sizeof(VecType) / sizeof(T);
+
+#pragma unroll
+    for (unsigned n = 0U; n < TN; ++n)
+    {
+#pragma unroll
+        for (unsigned m = 0U; m < TM; m += VEC_SIZE)
+        {
+            if((row + m) < rows && (col + n) < cols)
+            {
+                const unsigned idxC = (col + n) * rows + row + m;
+                if constexpr (SK == 1U)
+                {
+                    if constexpr (isMatSumSameType)
+                        *reinterpret_cast<VecType*>(&mat[idxC]) = *reinterpret_cast<const VecType*>(&sums[n * TM + m]);
+                    else
+                        mat[idxC] = static_cast<T>(sums[n * TM + m]);
+                }
+                else
+                    atomicAdd(&mat[idxC], static_cast<T>(sums[n * TM + m]));
+            }
+        }
+    }
+}
+
+template <unsigned SK, bool COAL, bool AT, bool BT, bool CT, MatType T>
 __global__ void matmul_naive_kernel(const T *A, const T *B, T *C, unsigned M, unsigned N, unsigned K)
 {
     using SumType = typename std::conditional_t<std::is_same_v<T, __half>, float, T>;
@@ -215,14 +262,21 @@ __global__ void matmul_naive_kernel(const T *A, const T *B, T *C, unsigned M, un
             sum += dot(valA, valB);
         }
 
-        if constexpr(SK == 1U)
-            C[row * N + col] = static_cast<T>(sum);
+        unsigned idxC;
+        if constexpr (CT)
+            idxC = col * M + row;
         else
-            atomicAdd(&C[row * N + col],  static_cast<T>(sum));
+            idxC = row * N + col;
+
+        if constexpr(SK == 1U)
+            C[idxC] = static_cast<T>(sum);
+        else
+            atomicAdd(&C[idxC],  static_cast<T>(sum));
     }
 }
 
-template <unsigned SK, unsigned BM, unsigned BN, unsigned BK, unsigned TM, unsigned TN, bool AT, bool BT, bool VEC, MatType T>
+template <unsigned SK, unsigned BM, unsigned BN, unsigned BK, unsigned TM, unsigned TN, bool AT, bool BT, bool CT,
+          bool VEC, MatType T>
 __global__ void matmul_tiles_kernel(const T *A, const T *B, T *C, unsigned M, unsigned N, unsigned K)
 {
     using SumType = typename std::conditional_t<std::is_same_v<T, __half>, float, T>;
@@ -256,9 +310,9 @@ __global__ void matmul_tiles_kernel(const T *A, const T *B, T *C, unsigned M, un
     __shared__ T smemA[BK * BM];  // STORE_AT - transposed or not; size always BK * BM
     __shared__ T smemB[BK * BN];
 
-    SumType sums[TM][TN] = {0.0f};
-    T regM[TM] = {0.0};
-    T regN[TN] = {0.0};
+    SumType sums[TM * TN] = {static_cast<SumType>(0)};
+    T regM[TM] = {static_cast<T>(0)};
+    T regN[TN] = {static_cast<T>(0)};
 
     unsigned splitStart;
     unsigned splitEnd;
@@ -280,14 +334,18 @@ __global__ void matmul_tiles_kernel(const T *A, const T *B, T *C, unsigned M, un
         loadToShared<BM, BN, BK, NUM_THREADS, AT, BT, STORE_AT, VEC>(A, B, M, N, K, smemA, smemB, threadIdx.x, blockOffset);
         __syncthreads();
 
-        processTiles<BM, BN, BK, TM, TN, STORE_AT, VEC>(ty, tx, smemA, smemB, regM, regN, sums);
+        processTiles<BM, BN, BK, TM, TN, STORE_AT, CT, VEC>(ty, tx, smemA, smemB, regM, regN, sums);
         __syncthreads();
     }
 
-    storeResult<SK, TM, TN, VEC>(C, row, col, M, N, sums);
+    if constexpr (CT)
+        storeResultCT<SK, TM, TN, VEC>(C, row, col, M, N, sums);
+    else
+        storeResult<SK, TM, TN, VEC>(C, row, col, M, N, sums);
 }
 
-template <unsigned SK, unsigned BM, unsigned BN, unsigned BK, unsigned TM, unsigned TN, bool AT, bool BT, bool VEC, MatType T>
+template <unsigned SK, unsigned BM, unsigned BN, unsigned BK, unsigned TM, unsigned TN, bool AT, bool BT, bool CT,
+          bool VEC, MatType T>
 __global__ void matmul_tiles_SDBuf_kernel(const T *A, const T *B, T *C, unsigned M, unsigned N, unsigned K)
 {
     using SumType = typename std::conditional_t<std::is_same_v<T, __half>, float, T>;
@@ -321,9 +379,9 @@ __global__ void matmul_tiles_SDBuf_kernel(const T *A, const T *B, T *C, unsigned
     __shared__ T smemA[2U][BK * BM];
     __shared__ T smemB[2U][BK * BN];
 
-    SumType sums[TM][TN] = {0.0f};
-    T regM[TM] = {0.0};
-    T regN[TN] = {0.0};
+    SumType sums[TM * TN] = {static_cast<SumType>(0)};
+    T regM[TM] = {static_cast<T>(0)};
+    T regN[TN] = {static_cast<T>(0)};
 
     unsigned splitStart;
     unsigned splitEnd;
@@ -350,18 +408,22 @@ __global__ void matmul_tiles_SDBuf_kernel(const T *A, const T *B, T *C, unsigned
     {
         loadToShared<BM, BN, BK, NUM_THREADS, AT, BT, STORE_AT, VEC>(A, B, M, N, K, smemA[nextIdx], smemB[nextIdx], threadIdx.x, blockOffset);
 
-        processTiles<BM, BN, BK, TM, TN, STORE_AT, VEC>(ty, tx, smemA[currentIdx], smemB[currentIdx], regM, regN, sums);
+        processTiles<BM, BN, BK, TM, TN, STORE_AT, CT, VEC>(ty, tx, smemA[currentIdx], smemB[currentIdx], regM, regN, sums);
         __syncthreads();
 
         std::swap(currentIdx, nextIdx);
     }
 
-    processTiles<BM, BN, BK, TM, TN, STORE_AT, VEC>(ty, tx, smemA[currentIdx], smemB[currentIdx], regM, regN, sums);
+    processTiles<BM, BN, BK, TM, TN, STORE_AT, CT, VEC>(ty, tx, smemA[currentIdx], smemB[currentIdx], regM, regN, sums);
 
-    storeResult<SK, TM, TN, VEC>(C, row, col, M, N, sums);
+    if constexpr (CT)
+        storeResultCT<SK, TM, TN, VEC>(C, row, col, M, N, sums);
+    else
+        storeResult<SK, TM, TN, VEC>(C, row, col, M, N, sums);
 }
 
-template <unsigned SK, unsigned BM, unsigned BN, unsigned BK, unsigned TM, unsigned TN, bool AT, bool BT, bool VEC, MatType T>
+template <unsigned SK, unsigned BM, unsigned BN, unsigned BK, unsigned TM, unsigned TN, bool AT, bool BT, bool CT,
+          bool VEC, MatType T>
 __global__ void matmul_tiles_DBuf_kernel(const T *A, const T *B, T *C, unsigned M, unsigned N, unsigned K)
 {
     using SumType = typename std::conditional_t<std::is_same_v<T, __half>, float, T>;
@@ -396,9 +458,9 @@ __global__ void matmul_tiles_DBuf_kernel(const T *A, const T *B, T *C, unsigned 
     __shared__ T smemA[2U][BK * BM];  // transposed
     __shared__ T smemB[2U][BK * BN];
 
-    SumType sums[TM][TN] = {0.0f};
-    T regM[TM] = {0.0};
-    T regN[TN] = {0.0};
+    SumType sums[TM * TN] = {static_cast<SumType>(0)};
+    T regM[TM] = {static_cast<T>(0)};
+    T regN[TN] = {static_cast<T>(0)};
 
     unsigned splitStart;
     unsigned splitEnd;
@@ -425,11 +487,11 @@ __global__ void matmul_tiles_DBuf_kernel(const T *A, const T *B, T *C, unsigned 
     {
         if(doubleBufferIdx == 0U)
         {
-            processTiles<BM, BN, BK, TM, TN, STORE_AT, VEC>(ty, tx, smemA[0U], smemB[0U], regM, regN, sums);
+            processTiles<BM, BN, BK, TM, TN, STORE_AT, CT, VEC>(ty, tx, smemA[0U], smemB[0U], regM, regN, sums);
             __syncthreads();
 
             if(blockOffset + BK < splitEnd)
-                processTiles<BM, BN, BK, TM, TN, STORE_AT, VEC>(ty, tx, smemA[1U], smemB[1U], regM, regN, sums);
+                processTiles<BM, BN, BK, TM, TN, STORE_AT, CT, VEC>(ty, tx, smemA[1U], smemB[1U], regM, regN, sums);
             __syncthreads();
 
             if(blockOffset + 2U * BK < splitEnd)
@@ -442,19 +504,22 @@ __global__ void matmul_tiles_DBuf_kernel(const T *A, const T *B, T *C, unsigned 
                 loadToShared<BM, BN, BK, NUM_THREADS2, AT, BT, STORE_AT, VEC>(A, B, M, N, K, smemA[1U], smemB[1U], threadIdx.x - NUM_THREADS2, blockOffset + BK);
             __syncthreads();
 
-            processTiles<BM, BN, BK, TM, TN, STORE_AT, VEC>(ty, tx, smemA[0U], smemB[0U], regM, regN, sums);
+            processTiles<BM, BN, BK, TM, TN, STORE_AT, CT, VEC>(ty, tx, smemA[0U], smemB[0U], regM, regN, sums);
             __syncthreads();
 
             if(blockOffset + BK < splitEnd)
-                processTiles<BM, BN, BK, TM, TN, STORE_AT, VEC>(ty, tx, smemA[1U], smemB[1U], regM, regN, sums);
+                processTiles<BM, BN, BK, TM, TN, STORE_AT, CT, VEC>(ty, tx, smemA[1U], smemB[1U], regM, regN, sums);
             __syncthreads();
         }
     }
 
-    storeResult<SK, TM, TN, VEC>(C, row, col, M, N, sums);
+    if constexpr (CT)
+        storeResultCT<SK, TM, TN, VEC>(C, row, col, M, N, sums);
+    else
+        storeResult<SK, TM, TN, VEC>(C, row, col, M, N, sums);
 }
 
-template <unsigned BM, unsigned BN, unsigned BK, unsigned WM, unsigned WN, unsigned WK, bool AT, bool BT, bool VEC>
+template <unsigned BM, unsigned BN, unsigned BK, unsigned WM, unsigned WN, unsigned WK, bool AT, bool BT, bool CT, bool VEC>
 __global__ void matmul_tiles_wmma_kernel(const __half *A, const __half *B, __half *C, unsigned M, unsigned N, unsigned K)
 {
     using SumType = __half;
@@ -511,34 +576,40 @@ __global__ void matmul_tiles_wmma_kernel(const __half *A, const __half *B, __hal
     }
 
     if(row < M && col < N)
-        nvcuda::wmma::store_matrix_sync(&C[row * N + col], sums, N, nvcuda::wmma::mem_row_major);
+    {
+        if constexpr (CT)
+            nvcuda::wmma::store_matrix_sync(&C[col * M + row], sums, M, nvcuda::wmma::mem_col_major);
+        else
+            nvcuda::wmma::store_matrix_sync(&C[row * N + col], sums, N, nvcuda::wmma::mem_row_major);  
+    }
 }
 
 ///// Launch functions /////
 
+using RuntimeBool = std::variant<std::bool_constant<false>, std::bool_constant<true>>;
+
+inline RuntimeBool to_variant(bool val) {
+    return val ? RuntimeBool{std::bool_constant<true>{}} : RuntimeBool{std::bool_constant<false>{}};
+}
+
 template <unsigned blockDimX = 16U, unsigned blockDimY = 16U, bool COAL = true, unsigned SK = 1U, MatType T>
-void launch_matmul_naive(const T *A, const T *B, T *C, unsigned M, unsigned N, unsigned K, bool AT, bool BT)
+void launch_matmul_naive(const T *A, const T *B, T *C, unsigned M, unsigned N, unsigned K,
+                         bool AT, bool BT, bool CT)
 {
     const dim3 blockDim(blockDimX, blockDimY);
     const dim3 gridDim(CEIL_DIV(COAL ? N : M, blockDim.x), CEIL_DIV(COAL ? M : N, blockDim.y), SK);
 
-    auto launchKernel = [&] <bool T1, bool T2> () {
-            matmul_naive_kernel<SK, COAL, T1, T2><<<gridDim, blockDim>>>(A, B, C, M, N, K);
+    auto launchKernel = [&](auto b1, auto b2, auto b3) {
+        matmul_naive_kernel<SK, COAL, b1.value, b2.value, b3.value><<<gridDim, blockDim>>>(A, B, C, M, N, K);
     };
 
-    if(AT && BT)
-        launchKernel.template operator()<true, true>();
-    else if(AT)
-        launchKernel.template operator()<true, false>();
-    else if(BT)
-        launchKernel.template operator()<false, true>();
-    else
-        launchKernel.template operator()<false, false>();
+    std::visit(launchKernel, to_variant(AT), to_variant(BT), to_variant(CT));
 }
 
 template <unsigned BM = 128U, unsigned BN = 128U, unsigned BK = 8U, unsigned TM = 8U, unsigned TN = 8U,
           bool VEC = true, bool DBUF = true, unsigned SK = 1U, MatType T>
-void launch_matmul_tiles(const T *A, const T *B, T *C, unsigned M, unsigned N, unsigned K, bool AT, bool BT)
+void launch_matmul_tiles(const T *A, const T *B, T *C, unsigned M, unsigned N, unsigned K,
+                         bool AT, bool BT, bool CT)
 {
     using VecType = typename std::conditional_t<VEC, int4, T>;
 
@@ -547,90 +618,49 @@ void launch_matmul_tiles(const T *A, const T *B, T *C, unsigned M, unsigned N, u
     const dim3 blockDim(BM * BN / (TM * TN));
     const dim3 gridDim(CEIL_DIV(N, BN), CEIL_DIV(M, BM), SK);
 
-    auto launchKernel = [&] <bool T1, bool T2, bool V> () {
+    auto launchKernel = [&](auto b1, auto b2, auto b3, auto v) {
         if constexpr (DBUF)
-            matmul_tiles_DBuf_kernel<SK, BM, BN, BK, TM, TN, T1, T2, V><<<gridDim, blockDim>>>(A, B, C, M, N, K);
+            matmul_tiles_DBuf_kernel<SK, BM, BN, BK, TM, TN, b1.value, b2.value, b3.value, VEC && v.value><<<gridDim, blockDim>>>(A, B, C, M, N, K);
         else
-            matmul_tiles_kernel<SK, BM, BN, BK, TM, TN, T1, T2, V><<<gridDim, blockDim>>>(A, B, C, M, N, K);
+            matmul_tiles_kernel<SK, BM, BN, BK, TM, TN, b1.value, b2.value, b3.value, VEC && v.value><<<gridDim, blockDim>>>(A, B, C, M, N, K);
     };
 
     const unsigned lda = AT ? M : K;
     const unsigned ldb = BT ? K : N;
-    const unsigned ldc = N;
+    const unsigned ldc = CT ? M : N;
     const bool possibleVecAccess = (lda % VEC_SIZE == 0U) && (ldb % VEC_SIZE == 0U) && (ldc % VEC_SIZE == 0U);
 
-    if(possibleVecAccess)
-    {
-        if(AT && BT)
-            launchKernel.template operator()<true, true, VEC>();
-        else if(AT)
-            launchKernel.template operator()<true, false, VEC>();
-        else if(BT)
-            launchKernel.template operator()<false, true, VEC>();
-        else
-            launchKernel.template operator()<false, false, VEC>();
-    }
-    else
-    {
-        if(AT && BT)
-            launchKernel.template operator()<true, true, false>();
-        else if(AT)
-            launchKernel.template operator()<true, false, false>();
-        else if(BT)
-            launchKernel.template operator()<false, true, false>();
-        else
-            launchKernel.template operator()<false, false, false>();
-    }
+    std::visit(launchKernel, to_variant(AT), to_variant(BT), to_variant(CT), to_variant(possibleVecAccess));
 }
 
 template <unsigned BM = 64U, unsigned BN = 64U, unsigned BK = 16U, unsigned WM = 16U, unsigned WN = 16U, unsigned WK = 16U,
           bool VEC = true>
-void launch_matmul_tiles_wmma(const __half *A, const __half *B, __half *C, unsigned M, unsigned N, unsigned K, bool AT, bool BT)
+void launch_matmul_tiles_wmma(const __half *A, const __half *B, __half *C, unsigned M, unsigned N, unsigned K,
+                              bool AT, bool BT, bool CT)
 {
     if(M % WM == 0U && N % WN == 0U)
     {
-      using VecType = typename std::conditional_t<VEC, int4, __half>;
+        using VecType = typename std::conditional_t<VEC, int4, __half>;
 
-      constexpr unsigned VEC_SIZE = sizeof(VecType) / sizeof(__half);
+        constexpr unsigned VEC_SIZE = sizeof(VecType) / sizeof(__half);
 
-      const dim3 blockDim(BM * BN * 32U / (WN * WM));
-      const dim3 gridDim(CEIL_DIV(N, BN), CEIL_DIV(M, BM));
+        const dim3 blockDim(BM * BN * 32U / (WN * WM));
+        const dim3 gridDim(CEIL_DIV(N, BN), CEIL_DIV(M, BM));
 
-      auto launchKernel = [&] <bool T1, bool T2, bool V> () {
-          matmul_tiles_wmma_kernel<BM, BN, BK, WM, WN, WK, T1, T2, V><<<gridDim, blockDim>>>(A, B, C, M, N, K);
-      };
+        auto launchKernel = [&](auto b1, auto b2, auto b3, auto v) {
+            matmul_tiles_wmma_kernel<BM, BN, BK, WM, WN, WK, b1.value, b2.value, b3.value, VEC && v.value><<<gridDim, blockDim>>>(A, B, C, M, N, K);
+        };
 
-      const unsigned lda = AT ? M : K;
-      const unsigned ldb = BT ? K : N;
-      const unsigned ldc = N;
-      const bool possibleVecAccess = (lda % VEC_SIZE == 0U) && (ldb % VEC_SIZE == 0U) && (ldc % VEC_SIZE == 0U);
+        const unsigned lda = AT ? M : K;
+        const unsigned ldb = BT ? K : N;
+        const unsigned ldc = CT ? M : N;
+        const bool possibleVecAccess = (lda % VEC_SIZE == 0U) && (ldb % VEC_SIZE == 0U) && (ldc % VEC_SIZE == 0U);
 
-      if(possibleVecAccess)
-      {
-          if(AT && BT)
-              launchKernel.template operator()<true, true, VEC>();
-          else if(AT)
-              launchKernel.template operator()<true, false, VEC>();
-          else if(BT)
-              launchKernel.template operator()<false, true, VEC>();
-          else
-              launchKernel.template operator()<false, false, VEC>();
-      }
-      else
-      {
-          if(AT && BT)
-              launchKernel.template operator()<true, true, false>();
-          else if(AT)
-              launchKernel.template operator()<true, false, false>();
-          else if(BT)
-              launchKernel.template operator()<false, true, false>();
-          else
-              launchKernel.template operator()<false, false, false>();
-      }
+        std::visit(launchKernel, to_variant(AT), to_variant(BT), to_variant(CT), to_variant(possibleVecAccess));
     }
     else
     {
-      launch_matmul_tiles<128U, 128U, 16U, 8U, 8U, VEC, false, 1U>(A, B, C, M, N, K, AT, BT);
+        launch_matmul_tiles<128U, 128U, 16U, 8U, 8U, VEC, false, 1U>(A, B, C, M, N, K, AT, BT, CT);
     }
 }
 
