@@ -20,4 +20,5 @@ if(BUILD_PYTHON)
 endif()
 
 add_subdirectory(kernels)
+add_subdirectory(kernelsAPIs)
 add_subdirectory(cpp_samples)
