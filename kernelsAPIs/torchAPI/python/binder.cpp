@@ -7,6 +7,7 @@
 #include <matrixVectorMulTorch.hpp>
 #include <matmulTorch.hpp>
 #include <tensorMulTorch.hpp>
+#include <matrixReductionTorch.hpp>
 
 using namespace pybind11::literals;
 
@@ -69,6 +70,11 @@ PYBIND11_MODULE(torch_extension, m)
          "A"_a, "B"_a, "transC"_a = false);
     m.def("matmul_BTiles_vec_wmma", &matmulBTilesVecWMMA, "Cuda matmul function with Vectorized Block tiles and tensor cores optimization",
          "A"_a, "B"_a, "transC"_a = false);
+
+    m.def("matmul_bias", &matrixMulBias, "Cuda matmul with bias Optimized function",
+         "A"_a, "B"_a, "bias"_a, "transC"_a = false);
+
+    m.def("matrix_reduction_row", &matrixRowReduction, "Cuda matrix row reduction function");
 
     m.def("tensor_mul", &tensorMul, "Cuda tensor multiplication function");
 }

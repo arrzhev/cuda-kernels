@@ -234,6 +234,128 @@ torch::Tensor matrixMul(torch::Tensor A, torch::Tensor B, bool transC)
     return C;
 }
 
+torch::Tensor matrixMulBias(torch::Tensor A, torch::Tensor B, torch::Tensor bias, bool transC)
+{
+    CHECK_MATMUL(A, B);
+    CHECK_FP(bias);
+    CHECK_CUDA(bias);
+    TORCH_CHECK(bias.dim() == 1 && B.size(1) == bias.size(0), "bias dim must be 1D tensor with size equal to B columns");
+
+    const unsigned M = A.size(0);
+    const unsigned K = A.size(1);
+    const unsigned N = B.size(1);
+
+    auto C = transC ? torch::empty({N, M}, A.options()).t() : torch::empty({M, N}, A.options());
+
+    const bool AT = A.stride(0) == 1 ? true : false;
+    const bool BT = B.stride(0) == 1 ? true : false;
+    const bool CT = C.stride(0) == 1 ? true : false;
+
+    const unsigned lda = AT ? M : K;
+    const unsigned ldb = BT ? K : N;
+    const unsigned ldc = CT ? M : N;
+    auto possibleVecAccess = [lda, ldb, ldc](const unsigned vecSize){
+        return (lda % vecSize == 0U) && (ldb % vecSize == 0U) && (ldc % vecSize == 0U);
+    };
+
+    // Helper function to launch matmul tiles kernel for fp16 data type
+    auto launchHalf = [&] <unsigned BM, unsigned BN, unsigned BK, unsigned TM, unsigned TN, bool VEC> () {
+        launch_matmul_bias_tiles<BM, BN, BK, TM, TN, VEC>(
+            reinterpret_cast<__half*>(A.data_ptr<torch::Half>()),
+            reinterpret_cast<__half*>(B.data_ptr<torch::Half>()),
+            reinterpret_cast<__half*>(bias.data_ptr<torch::Half>()),
+            reinterpret_cast<__half*>(C.data_ptr<torch::Half>()),
+            M, N, K, AT, BT, CT);
+    };
+
+    // Helper function to launch matmul tiles kernel for fp32 data type
+    auto launchFull = [&] <unsigned BM, unsigned BN, unsigned BK, unsigned TM, unsigned TN, bool VEC> () {      
+        launch_matmul_bias_tiles<BM, BN, BK, TM, TN, VEC>(
+            A.data_ptr<float>(), B.data_ptr<float>(), bias.data_ptr<float>(), C.data_ptr<float>(),
+                M, N, K, AT, BT, CT);
+    };
+
+    // Simplified example of kernel hyper parameters selection based on input data
+    if(M > 256U || N > 256U)
+    {
+        constexpr unsigned BM = 128U;
+        constexpr unsigned BN = 128U;
+        constexpr unsigned TM = 8U;
+        constexpr unsigned TN = 8U;
+        
+        if(A.scalar_type() == torch::kHalf)
+        {
+            if(possibleVecAccess(8U))
+            {
+                constexpr unsigned BK = 16U;
+                constexpr bool VEC = true;
+                launchHalf.template operator()<BM, BN, BK, TM, TN, VEC>();
+            }
+            else
+            {
+                constexpr unsigned BK = 8U;
+                constexpr bool VEC = false;
+                launchHalf.template operator()<BM, BN, BK, TM, TN, VEC>();
+            }
+        }
+        else
+        {
+            constexpr unsigned BK = 16U;
+            constexpr bool VEC = true;
+            launchFull.template operator()<BM, BN, BK, TM, TN, VEC>();
+        }
+    }
+    else if(M > 128U || N > 128U)
+    {
+        constexpr unsigned BM = 64U;
+        constexpr unsigned BN = 64U;
+        constexpr unsigned BK = 16U;
+
+        if(A.scalar_type() == torch::kHalf)
+        {
+            if(possibleVecAccess(8U))
+            {
+                constexpr unsigned TM = 8U;
+                constexpr unsigned TN = 8U;
+                constexpr bool VEC = true;
+                launchHalf.template operator()<BM, BN, BK, TM, TN, VEC>();
+            }
+            else
+            {
+                constexpr unsigned TM = 4U;
+                constexpr unsigned TN = 4U;
+                constexpr bool VEC = false;
+                launchHalf.template operator()<BM, BN, BK, TM, TN, VEC>();
+            }
+        }
+        else
+        {
+            constexpr unsigned TM = 4U;
+            constexpr unsigned TN = 4U;
+            constexpr bool VEC = true;
+            launchFull.template operator()<BM, BN, BK, TM, TN, VEC>();
+        }
+    }
+    else
+    {
+        constexpr unsigned BM = 32U;
+        constexpr unsigned BN = 32U;
+        constexpr unsigned BK = 32U;
+        constexpr unsigned TM = 1U;
+        constexpr unsigned TN = 1U;
+        constexpr bool VEC = false;
+
+        if(A.scalar_type() == torch::kHalf)
+            launchHalf.template operator()<BM, BN, BK, TM, TN, VEC>();
+        else
+            launchFull.template operator()<BM, BN, BK, TM, TN, VEC>();
+    }
+
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+
+    return C;
+}
+
 torch::Tensor matmulNaive(torch::Tensor A, torch::Tensor B, bool transC)
 {
     CHECK_MATMUL(A, B);

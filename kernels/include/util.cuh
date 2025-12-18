@@ -10,6 +10,10 @@
 template <typename T, typename... AllowedTypes>
 concept IsAnyOf = (std::same_as<T, AllowedTypes> || ...);
 
+// Input data type to most of the kernels
+template <typename T>
+concept InputType = IsAnyOf<T, int, double, float, __half>;
+
 #define cudaCheckErrors(func) { gpuAssert(func, __FILE__, __LINE__); }
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
 {

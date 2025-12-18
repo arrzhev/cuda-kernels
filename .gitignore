@@ -72,6 +72,7 @@ CMakePresets.json
 *.log
 *.tmp
 temp/
+.data/
 
 # Editor backup files
 *~

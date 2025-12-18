@@ -4,16 +4,10 @@ Set of CUDA kernel functions with various optimizations accompanied by simple C 
 
 ## Project structure
 
-- `kernels/`: Main cuda kernels directory
-    - `include/`: Cuda kernels public headers
-    - `src/`: Cuda kernels source code
+- `kernels/`: Main cuda kernels directory with kernel's source code
 - `kernelsAPIs/`: Available kernels APIs for convenient usage
     - `cAPI/`: C/C++ APIs for each kernel 
-        - `include/`: C/C++ APIs public headers
-        - `src/`: C/C++ APIs source code
     - `torchAPI/`: PyTorch C/C++ APIs for each kernel
-        - `include/`: PyTorch C/C++ APIs public headers
-        - `src/`: PyTorch C/C++ APIs source code
         - `python/`: PyBindings for PyTorch C/C++ kernels APIs
 - `tests/`: Unit and performance tests for each kernel. Uses python extension
 - `cpp_samples/`: Sample use cases for each kernel using C/C++ API
@@ -23,14 +17,16 @@ Set of CUDA kernel functions with various optimizations accompanied by simple C 
 
 ### Prerequisites
 
-1. Download and install the [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) for your corresponding platform.
+1. Download and install the [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) for your platform.
 2. Download and install CMake.
-3. To be able to run python samples following packages are needed:
+3. To be able to compile pyTorchApi and run test and python samples following packages are needed:
     - pyTorch with cuda support (same version as your installed cuda toolkit)
     - pybind11
     - pytest
     - scikit-image
     - matplotlib
+
+**Note:** If you are using **cuda 12.6** feel free to install requirements, otherwise install pyTorch with needed cuda version support.
 
 ### Installation process
 
@@ -99,17 +95,17 @@ Examples of achieved performance running kernels on NVIDIA Tesla T4 (Turing).
 2. Single optimized kernel performance on various matrices shapes, all matrices have row-major layout and fp32 data type:
 
 <!-- benchmark_results -->
-| Shape (MxNxK)    | My kernel TFLOPs/s | PyTorch TFLOPs/s | Performance compared to PyTorch|
-|:-----------------|:------------------:|:----------------:|:------------------------------:|
-| 1: 128x128x128   |       `0.13`       |      `0.20`      | 62.99%                         |
-| 2: 256x256x256   |       `0.96`       |      `1.11`      | 87.68%                         |
-| 3: 512x512x512   |       `2.19`       |      `3.81`      | 57.57%                         |
-| 4: 1024x1024x1024|       `3.29`       |      `3.80`      | 86.65%                         |
-| 5: 2048x2048x2048|       `3.38`       |      `3.65`      | 92.51%                         |
-| 6: 512x4068x7168 |       `3.18`       |      `4.30`      | 73.97%                         |
-| 7: 512x7168x2304 |       `3.44`       |      `4.33`      | 79.53%                         |
-| 8: 512x512x1024  |       `2.10`       |      `3.80`      | 55.20%                         |
-| 9: 512x512x2048  |       `2.66`       |      `3.95`      | 67.34%                         |
-|10: 512x512x4096  |       `2.90`       |      `4.05`      | 71.65%                         |
-|11: 512x512x8192  |       `2.98`       |      `3.90`      | 76.41%                         |
+| Id |   M   |   N   |   K   | My kernel TFLOPs/s | PyTorch TFLOPs/s | Performance compared to PyTorch|
+|:---|:-----:|:-----:|:-----:|:------------------:|:----------------:|:------------------------------:|
+| 1  | 128   | 128   | 128   |       `0.13`       |      `0.20`      | 62.99%                         |
+| 2  | 256   | 256   | 256   |       `0.96`       |      `1.11`      | 87.68%                         |
+| 3  | 512   | 512   | 512   |       `2.19`       |      `3.81`      | 57.57%                         |
+| 4  | 1024  | 1024  | 1024  |       `3.29`       |      `3.80`      | 86.65%                         |
+| 5  | 2048  | 2048  | 2048  |       `3.38`       |      `3.65`      | 92.51%                         |
+| 6  | 512   | 4068  | 7168  |       `3.18`       |      `4.30`      | 73.97%                         |
+| 7  | 512   | 7168  | 2304  |       `3.44`       |      `4.33`      | 79.53%                         |
+| 8  | 512   | 512   | 1024  |       `2.10`       |      `3.80`      | 55.20%                         |
+| 9  | 512   | 512   | 2048  |       `2.66`       |      `3.95`      | 67.34%                         |
+| 10 | 512   | 512   | 4096  |       `2.90`       |      `4.05`      | 71.65%                         |
+| 11 | 512   | 512   | 8192  |       `2.98`       |      `3.90`      | 76.41%                         |
 <!-- benchmark_results -->
