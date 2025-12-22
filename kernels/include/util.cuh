@@ -2,6 +2,7 @@
 #define UTIL_KERNELS
 
 #include <concepts>
+#include <variant>
 #include <cstdio>
 #include <cuda_fp16.h>
 
@@ -13,6 +14,12 @@ concept IsAnyOf = (std::same_as<T, AllowedTypes> || ...);
 // Input data type to most of the kernels
 template <typename T>
 concept InputType = IsAnyOf<T, int, double, float, __half>;
+
+using RuntimeBool = std::variant<std::bool_constant<false>, std::bool_constant<true>>;
+
+inline RuntimeBool to_variant(bool val) {
+    return val ? RuntimeBool{std::bool_constant<true>{}} : RuntimeBool{std::bool_constant<false>{}};
+}
 
 #define cudaCheckErrors(func) { gpuAssert(func, __FILE__, __LINE__); }
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)

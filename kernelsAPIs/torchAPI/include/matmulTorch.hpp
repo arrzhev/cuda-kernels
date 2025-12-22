@@ -26,6 +26,4 @@ torch::Tensor matmulTTiles2DDBufVec(torch::Tensor A, torch::Tensor B, bool trans
 torch::Tensor matmulTTiles2DDBufVecK(torch::Tensor A, torch::Tensor B, bool transC = false);
 torch::Tensor matmulBTilesVecWMMA(torch::Tensor A, torch::Tensor B, bool transC = false);
 
-torch::Tensor matrixMulBias(torch::Tensor A, torch::Tensor B, torch::Tensor bias, bool transC);
-
 #endif // MATMUL_TORCH

@@ -4,5 +4,6 @@
 #include <torch/torch.h>
 
 torch::Tensor matrixRowReduction(torch::Tensor A);
+torch::Tensor matrixRowReductionReLU(torch::Tensor A, torch::Tensor AR);
 
 #endif // MATRIX_REDUCTION_TORCH

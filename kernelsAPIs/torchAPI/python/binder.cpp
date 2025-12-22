@@ -6,6 +6,7 @@
 #include <vectorDotProductTorch.hpp>
 #include <matrixVectorMulTorch.hpp>
 #include <matmulTorch.hpp>
+#include <matmulNNTorch.hpp>
 #include <tensorMulTorch.hpp>
 #include <matrixReductionTorch.hpp>
 
@@ -72,9 +73,13 @@ PYBIND11_MODULE(torch_extension, m)
          "A"_a, "B"_a, "transC"_a = false);
 
     m.def("matmul_bias", &matrixMulBias, "Cuda matmul with bias Optimized function",
-         "A"_a, "B"_a, "bias"_a, "transC"_a = false);
+         "A"_a, "B"_a, "bias"_a, "use_relu"_a = false, "transC"_a = false);
+
+    m.def("matmul_relu", &matrixMulReLU, "Cuda matmul with bias Optimized function",
+         "A"_a, "AR"_a, "B"_a, "transC"_a = false);
 
     m.def("matrix_reduction_row", &matrixRowReduction, "Cuda matrix row reduction function");
+    m.def("matrix_reduction_row_relu", &matrixRowReductionReLU, "Cuda matrix row reduction fused with ReLU backward step function");
 
     m.def("tensor_mul", &tensorMul, "Cuda tensor multiplication function");
 }
