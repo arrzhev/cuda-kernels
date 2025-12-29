@@ -9,7 +9,7 @@
 #include <matmulNNTorch.hpp>
 #include <tensorMulTorch.hpp>
 #include <matrixReductionTorch.hpp>
-#include <layerNormTorch.hpp>
+#include <normalizationTorch.hpp>
 
 using namespace pybind11::literals;
 
@@ -96,4 +96,7 @@ PYBIND11_MODULE(torch_extension, m)
     // Layer norm
     m.def("layer_norm", &layerNorm, "Cuda layer normalization function",
            "X"_a, "W"_a, "B"_a, "eps"_a = 1e-5);
+
+    m.def("rms_norm", &RMSNorm, "Cuda RMS normalization function",
+           "X"_a, "W"_a, "eps"_a = 1e-5);
 }
