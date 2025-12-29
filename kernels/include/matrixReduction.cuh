@@ -7,7 +7,7 @@
 
 template <bool VEC, bool ReLU, InputType T>
 __global__ void matrixRowReduction_naive_kernel(const T *A, const T* AR, T *B, unsigned rows, unsigned cols)
- {
+{
     using SumType = typename std::conditional_t<std::is_same_v<T, __half>, float, T>;
     using VecType = typename std::conditional_t<VEC, int4, T>;
     constexpr unsigned VEC_SIZE = sizeof(VecType) / sizeof(T);

@@ -9,24 +9,31 @@
 #include <matmulNNTorch.hpp>
 #include <tensorMulTorch.hpp>
 #include <matrixReductionTorch.hpp>
+#include <layerNormTorch.hpp>
 
 using namespace pybind11::literals;
 
 PYBIND11_MODULE(torch_extension, m) 
 {
+    // Tensor Add
     m.def("tensor_add", &tensorAdd, "Cuda tensor addition function");
 
+    // Grayscale
     m.def("rgb2gray", &rgb2gray, "Cuda rgb to gray image conversion function");
 
+    // Blur
     m.def("mean_blur", &meanBlur, "Cuda mean blur grayscale image function");
 
+    // Dot product
     m.def("vector_dot_product", &vectorDotProduct, "Cuda vector dot product function");
 
+    // Matrix x Vector
     m.def("matrix_vector_mul", &matrixVectorMul, "Cuda matrix vector multiplication function");
     m.def("matrix_vector_mul_naive", &matrixVectorMulNaive, "Cuda naive matrix vector multiplication function");
     m.def("matrix_vector_mul_shared", &matrixVectorMulShared, "Cuda matrix vector multiplication function with shared memory optimization");
     m.def("matrix_vector_mul_warp", &matrixVectorMulWarp, "Cuda matrix vector multiplication function with warp optimization");
 
+    // Matmul
     m.def("matmul", &matrixMul, "Cuda matmul Optimized function",
          "A"_a, "B"_a, "transC"_a = false);
     m.def("matmul_naive", &matmulNaive, "Cuda matmul Naive function",
@@ -72,14 +79,21 @@ PYBIND11_MODULE(torch_extension, m)
     m.def("matmul_BTiles_vec_wmma", &matmulBTilesVecWMMA, "Cuda matmul function with Vectorized Block tiles and tensor cores optimization",
          "A"_a, "B"_a, "transC"_a = false);
 
+    // Tensor mul
+    m.def("tensor_mul", &tensorMul, "Cuda tensor multiplication function");
+
+    // Matmul NN
     m.def("matmul_bias", &matrixMulBias, "Cuda matmul with bias Optimized function",
          "A"_a, "B"_a, "bias"_a, "use_relu"_a = false, "transC"_a = false);
 
     m.def("matmul_relu", &matrixMulReLU, "Cuda matmul with bias Optimized function",
          "A"_a, "AR"_a, "B"_a, "transC"_a = false);
 
+    // Matrix reduction
     m.def("matrix_reduction_row", &matrixRowReduction, "Cuda matrix row reduction function");
     m.def("matrix_reduction_row_relu", &matrixRowReductionReLU, "Cuda matrix row reduction fused with ReLU backward step function");
 
-    m.def("tensor_mul", &tensorMul, "Cuda tensor multiplication function");
+    // Layer norm
+    m.def("layer_norm", &layerNorm, "Cuda layer normalization function",
+           "X"_a, "W"_a, "B"_a, "eps"_a = 1e-5);
 }
