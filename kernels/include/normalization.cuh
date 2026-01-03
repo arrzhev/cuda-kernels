@@ -1,5 +1,5 @@
-#ifndef LAYER_NORM_KERNELS
-#define LAYER_NORM_KERNELS
+#ifndef NORMALIZATION_KERNELS
+#define NORMALIZATION_KERNELS
 
 #include <util.cuh>
 
@@ -8,7 +8,7 @@
 template <unsigned BLOCK_SIZE, bool VEC, InputType T>
 __global__ void layerNorm_kernel(const T *X, const T* W, const T *B, T *Y, float eps, unsigned size)
 {
-    using SumType = typename std::conditional_t<std::is_same_v<T, __half>, float, T>;
+    using SumType = float;
     using VecType = typename std::conditional_t<VEC, int4, T>;
     constexpr unsigned VEC_SIZE = sizeof(VecType) / sizeof(T);
 
@@ -75,7 +75,7 @@ __global__ void layerNorm_kernel(const T *X, const T* W, const T *B, T *Y, float
 template <unsigned BLOCK_SIZE, bool VEC, InputType T>
 __global__ void RMSNorm_kernel(const T *X, const T* W, T *Y, float eps, unsigned size)
 {
-    using SumType = typename std::conditional_t<std::is_same_v<T, __half>, float, T>;
+    using SumType = float;
     using VecType = typename std::conditional_t<VEC, int4, T>;
     constexpr unsigned VEC_SIZE = sizeof(VecType) / sizeof(T);
 
@@ -163,4 +163,4 @@ void launch_RMSNorm(const T *X, const T* W, T *Y, float eps, unsigned rows, unsi
     }
 }
 
-#endif // LAYER_NORM_KERNELS
+#endif // NORMALIZATION_KERNELS

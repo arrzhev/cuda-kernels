@@ -10,6 +10,7 @@
 #include <tensorMulTorch.hpp>
 #include <matrixReductionTorch.hpp>
 #include <normalizationTorch.hpp>
+#include <ropeTorch.hpp>
 
 using namespace pybind11::literals;
 
@@ -93,10 +94,13 @@ PYBIND11_MODULE(torch_extension, m)
     m.def("matrix_reduction_row", &matrixRowReduction, "Cuda matrix row reduction function");
     m.def("matrix_reduction_row_relu", &matrixRowReductionReLU, "Cuda matrix row reduction fused with ReLU backward step function");
 
-    // Layer norm
+    // Normalization
     m.def("layer_norm", &layerNorm, "Cuda layer normalization function",
            "X"_a, "W"_a, "B"_a, "eps"_a = 1e-5);
 
     m.def("rms_norm", &RMSNorm, "Cuda RMS normalization function",
            "X"_a, "W"_a, "eps"_a = 1e-5);
+
+    // ROPE
+    m.def("rope", &rope, "Cuda rotary positional embedding function");
 }
