@@ -103,4 +103,5 @@ PYBIND11_MODULE(torch_extension, m)
 
     // ROPE
     m.def("rope", &rope, "Cuda rotary positional embedding function");
+    m.def("rope_cached", &rope_cached, "Cuda cached rotary positional embedding function");
 }

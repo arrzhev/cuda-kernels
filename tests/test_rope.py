@@ -4,6 +4,16 @@ import torch.utils.benchmark as benchmark
 
 import torch_extension
 
+def get_sin_cos(seq_len, dim, dtype=torch.float32, device='cuda'):
+
+    half = dim // 2
+    inv_freq = 1.0 / (10000 ** (torch.arange(0, half, dtype=dtype, device=device) / half))
+    positions = torch.arange(seq_len, dtype=dtype, device=device)
+    theta = positions[:, None] * inv_freq[None, :]
+    sin_cos = torch.cat((torch.sin(theta).unsqueeze(-1), torch.cos(theta).unsqueeze(-1)), dim=-1)
+
+    return sin_cos
+
 def rope(x):
     b, seq_len, dim = x.shape
     assert dim % 2 == 0, "Dimension must be even for RoPE"
@@ -41,8 +51,20 @@ SCALE_SIZES = [(64, 64, 64), (256, 256, 256)]
 def test_rope(B, L, D):
     X = torch.randn(B, L, D, dtype=torch.float32, device='cuda')
 
-    y_extension = torch_extension.rope(X).cpu()
-    y_torch = rope(X).cpu()
+    y_extension = torch_extension.rope(X)
+    y_torch = rope(X)
+
+    torch.testing.assert_close(y_torch, y_extension, atol=1e-2, rtol=1e-2)
+
+@pytest.mark.unit
+@pytest.mark.parametrize("B, L, D", IRREGULAR_SIZES + SCALE_SIZES)
+def test_rope_cached(B, L, D):
+    X = torch.randn(B, L, D, dtype=torch.float32, device='cuda')
+
+    sin_cos = get_sin_cos(L, D, X.dtype, X.device)
+
+    y_extension = torch_extension.rope_cached(X, sin_cos)
+    y_torch = rope(X)
 
     torch.testing.assert_close(y_torch, y_extension, atol=1e-2, rtol=1e-2)
 
@@ -54,9 +76,10 @@ def test_perf_rope():
         label = f'ROPE'
         sub_label = f'Size: {B}x{L}x{D}'
         X = torch.randn(B, L, D, dtype=torch.float32, device='cuda')
+        sin_cos = get_sin_cos(L, D, X.dtype, X.device)
 
         results.append(benchmark.Timer(
-            stmt='rope(X).cpu()',
+            stmt='rope(X)',
             setup='',
             globals={'rope': rope, 'X': X},
             label=label,
@@ -72,6 +95,15 @@ def test_perf_rope():
         label=label,
         sub_label=sub_label,
         description = 'rope',
+        ).blocked_autorange())
+
+        results.append(benchmark.Timer(
+        stmt='torch_extension.rope_cached(X, sin_cos)',
+        setup='',
+        globals={'torch_extension': torch_extension, 'X': X, 'sin_cos': sin_cos},
+        label=label,
+        sub_label=sub_label,
+        description = 'rope_cached',
         ).blocked_autorange())
 
     compare = benchmark.Compare(results)
