@@ -341,7 +341,7 @@ __global__ void matmul_tiles_DBuf_kernel(const T *A, const T *B, T *C, unsigned 
 template <unsigned BM, unsigned BN, unsigned BK, unsigned WM, unsigned WN, unsigned WK, bool AT, bool BT, bool CT, bool VEC>
 __global__ void matmul_tiles_wmma_kernel(const __half *A, const __half *B, __half *C, unsigned M, unsigned N, unsigned K)
 {
-    using SumType = __half;
+    using SumType = float;
     using VecType = typename std::conditional_t<VEC, int4, __half>;
 
     constexpr unsigned VEC_SIZE = sizeof(VecType) / sizeof(__half);
@@ -373,9 +373,10 @@ __global__ void matmul_tiles_wmma_kernel(const __half *A, const __half *B, __hal
     __shared__ __half smemA[BK * BM];  // STORE_AT - transposed or not; size always BK * BM
     __shared__ __half smemB[BK * BN];
 
-    nvcuda::wmma::fragment<nvcuda::wmma::accumulator, WM, WN, WK, SumType> sums;
     nvcuda::wmma::fragment<nvcuda::wmma::matrix_a, WM, WN, WK, __half, nvcuda::wmma::col_major> regM;
     nvcuda::wmma::fragment<nvcuda::wmma::matrix_b, WM, WN, WK, __half, nvcuda::wmma::row_major> regN;
+    nvcuda::wmma::fragment<nvcuda::wmma::accumulator, WM, WN, WK, __half> regC;
+    nvcuda::wmma::fragment<nvcuda::wmma::accumulator, WM, WN, WK, SumType> sums;
 
     nvcuda::wmma::fill_fragment(sums, static_cast<__half>(0));
 
@@ -395,12 +396,16 @@ __global__ void matmul_tiles_wmma_kernel(const __half *A, const __half *B, __hal
         __syncthreads();
     }
 
+    // Store fp32 accumulator in fp16
+    for(int i = 0; i < sums.num_elements; i++)
+      regC.x[i] = __float2half(sums.x[i]);
+
     if(row < M && col < N)
     {
         if constexpr (CT)
-            nvcuda::wmma::store_matrix_sync(&C[col * M + row], sums, M, nvcuda::wmma::mem_col_major);
+            nvcuda::wmma::store_matrix_sync(&C[col * M + row], regC, M, nvcuda::wmma::mem_col_major);
         else
-            nvcuda::wmma::store_matrix_sync(&C[row * N + col], sums, N, nvcuda::wmma::mem_row_major);  
+            nvcuda::wmma::store_matrix_sync(&C[row * N + col], regC, N, nvcuda::wmma::mem_row_major);  
     }
 }
 
